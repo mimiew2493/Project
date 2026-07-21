@@ -15,14 +15,27 @@ bun dev
 ```
 
 ## Git
+ดึงงานล่าสุด
+```bash
+git pull origin dev
+```
+เสร็จ
 ```bash
 git add .
-git commit -m "Initial project setup"
-
-git remote add origin <github-url>
-
-git push -u origin dev
 ```
+เช็คไฟล์
+```bash
+git status
+```
+Commit
+```bash
+git commit -m "describe your change"
+```
+Push
+```bash
+git push origin dev
+```
+
 
 สร้าง Git repository
 ```bash
