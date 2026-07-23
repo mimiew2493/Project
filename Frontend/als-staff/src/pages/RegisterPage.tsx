@@ -10,7 +10,8 @@ export default function RegisterPage() {
       <section className="panel form-panel">
         <h2>ข้อมูลส่วนตัว</h2>
         <div className="form-grid">
-          <Field label="ชื่อ–นามสกุล" required><input placeholder="ระบุชื่อ–นามสกุล"/></Field>
+          <Field label="ชื่อ" required><input placeholder="ระบุชื่อ"/></Field>
+          <Field label="นามสกุล" required><input placeholder="ระบุนามสกุล"/></Field>
           <Field label="วัน/เดือน/ปีเกิด" required><input type="date"/></Field>
           <Field label="เพศ" required><select><option>เลือก...</option><option>ชาย</option><option>หญิง</option><option>ไม่ระบุ</option></select></Field>
           <Field label="ที่อยู่ปัจจุบัน" required><textarea placeholder="บ้านเลขที่ ตำบล อำเภอ จังหวัด"/></Field>
