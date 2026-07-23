@@ -15,41 +15,56 @@ bun dev
 ```
 
 ## Git
-ดึงงานล่าสุด
+#### ดึงงานล่าสุด
+
 ```bash
 git pull origin dev
 ```
-เสร็จ
+
+#### เสร็จ
+
 ```bash
 git add .
 ```
-เช็คไฟล์
+
+#### เช็คไฟล์
+
 ```bash
 git status
 ```
-Commit
+
+#### Commit
+
 ```bash
 git commit -m "describe your change"
 ```
-Push
+
+#### Push
+
 ```bash
 git push origin dev
 ```
 
+### สร้าง Git repository
 
-สร้าง Git repository
 ```bash
 git init
 ```
+
 เช็ค branch
+
 ```bash
 git branch
 ```
+
 สร้าง branch dev
+
 ```bash
 git branch dev
 ```
+
 สลับไป dev
+
 ```bash
 git checkout dev
 # or
