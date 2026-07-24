@@ -22,6 +22,13 @@
       "when": 1784632590915,
       "tag": "0002_zippy_harrier",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1784807795216,
+      "tag": "0003_lean_jocasta",
+      "breakpoints": true
     }
   ]
 }

@@ -4,6 +4,7 @@ export const ID_PREFIX = {
   OT: "OT",
   MEDICAL_RECORDS: "MRS",
   PATIENT_PROGRAM: "PP",
+  PROGRAM: "PRG",
 };
 export const SEQUENCE = {
   USER: "users_id_seq",
