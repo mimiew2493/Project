@@ -1,19 +1,48 @@
+import { useEffect, useState } from 'react'
 import PageHeader from '../components/PageHeader'
 import Stepper from '../components/Stepper'
-import { patients } from '../data/mockData'
 
 export default function PatientsPage({ onRegister }: { onRegister: () => void }) {
+  const [patients, setPatients] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    fetch('http://localhost:3000/api/patients')
+      .then(res => res.json())
+      .then(data => {
+        setPatients(data)
+        setLoading(false)
+      })
+      .catch(() => setLoading(false))
+  }, [])
+
+  if (loading) return <p style={{ padding: 40 }}>กำลังโหลด...</p>
+
   return <>
-    <PageHeader title="คิวรับผู้ป่วยเข้าระบบ" subtitle="ตรวจสอบสถานะการรับเรื่องและดำเนินการลงทะเบียนผู้ป่วยใหม่" action={<button className="btn primary" onClick={onRegister}>+ รับผู้ป่วยใหม่</button>} />
+    <PageHeader
+      title="รายชื่อผู้ป่วยในระบบ"
+      subtitle="ตรวจสอบรายชื่อผู้ป่วย"
+      action={<button className="btn primary" onClick={onRegister}>+ รับผู้ป่วยใหม่</button>}
+    />
     <div className="patient-list">
-      {patients.map((p, index) => <article className="patient-card" key={p.hn}>
-        <div className="patient-top">
-          <div className="patient-identity"><div className="initial">{index + 1}</div><div><h3>{p.name}</h3><p>{p.hn} · {p.phone} · รับเรื่องเมื่อ {p.created}</p></div></div>
-          <div className="patient-actions"><span className="progress-pill">ขั้นที่ {p.step}/{p.total}</span><button className="btn small primary" onClick={onRegister}>ดำเนินการต่อ</button></div>
-        </div>
-        <Stepper current={p.step}/>
-      </article>)}
+      {patients.length === 0 && <p style={{ padding: 20, color: '#888' }}>ยังไม่มีผู้ป่วยในระบบ</p>}
+      {patients.map((p, index) => (
+        <article className="patient-card" key={p.patient_id}>
+          <div className="patient-top">
+            <div className="patient-identity">
+              <div className="initial">{index + 1}</div>
+              <div>
+                <h3>{p.patient_id}</h3>
+                <p>อาการ: {p.medical_condition || '—'} · น้ำหนัก: {p.weight || '—'} kg · ลงทะเบียน: {p.register_date}</p>
+              </div>
+            </div>
+            <div className="patient-actions">
+              <button className="btn small primary" onClick={onRegister}>ดำเนินการต่อ</button>
+            </div>
+          </div>
+          <Stepper current={2}/>
+        </article>
+      ))}
     </div>
-    <div className="notice"><strong>คำแนะนำ:</strong> คิวที่มีสถานะค้างควรได้รับการตรวจสอบข้อมูลและดำเนินการต่อให้ครบตามขั้นตอน</div>
   </>
 }
