@@ -87,9 +87,9 @@ export const medicalRecordsStaffRelations = relations(
 =========================== */
 
 export const programsRelations = relations(programs, ({ one, many }) => ({
-  therapist: one(occupationalTherapists, {
-    fields: [programs.OT_id],
-    references: [occupationalTherapists.OT_id],
+  createdByUser: one(users, {
+    fields: [programs.created_by],
+    references: [users.users_id],
   }),
 
   patientPrograms: many(patientPrograms),
@@ -114,7 +114,7 @@ export const patientProgramsRelations = relations(
 
     therapist: one(occupationalTherapists, {
       fields: [patientPrograms.assigned_by],
-      references: [occupationalTherapists.OT_id],
+      references: [occupationalTherapists.ot_id],
     }),
 
     therapySessions: many(therapySessions),
