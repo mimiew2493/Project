@@ -713,3 +713,4 @@ console.log('  ✅ Setup complete!');
 console.log('  Run: npm run dev');
 console.log('  Open: http://localhost:5173/');
 console.log('========================================\n');
+
