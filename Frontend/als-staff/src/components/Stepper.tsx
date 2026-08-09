@@ -1,15 +1,21 @@
-import { CheckIcon } from './Icons'
-const labels = ['รับเรื่อง', 'ลงทะเบียน', 'นัดหมาย', 'จับคู่อุปกรณ์']
+const LABELS = ['รับเรื่อง + ลงทะเบียน', 'นัดหมาย', 'จับคู่อุปกรณ์']
+
 export default function Stepper({ current }: { current: number }) {
-  return <div className="stepper">
-    {labels.map((label, i) => {
-      const n = i + 1
-      const state = n < current ? 'done' : n === current ? 'current' : 'pending'
-      return <div className={`step ${state}`} key={label}>
-        <div className="step-node">{state === 'done' ? <CheckIcon/> : n}</div>
-        <span>{label}</span>
-        {i < labels.length - 1 && <div className="step-line"/>}
-      </div>
-    })}
-  </div>
+  return (
+    <div className="stepper">
+      {LABELS.map((label, i) => {
+        const n = i + 1
+        const cls = n < current ? 'step step-done' : n === current ? 'step step-active' : 'step'
+        return (
+          <div key={label} style={{ display: 'flex', alignItems: 'center', flex: 1 }}>
+            <div className={cls}>
+              <span className="step-num">{n < current ? '✓' : n}</span>
+              {label}
+            </div>
+            {i < LABELS.length - 1 && <div className="stepline" />}
+          </div>
+        )
+      })}
+    </div>
+  )
 }

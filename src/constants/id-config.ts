@@ -5,6 +5,7 @@ export const ID_PREFIX = {
   MEDICAL_RECORDS: "MRS",
   PATIENT_PROGRAM: "PP",
   PROGRAM: "PRG",
+  APPOINTMENT: "APT",
 };
 export const SEQUENCE = {
   USER: "users_id_seq",
@@ -17,4 +18,5 @@ export const SEQUENCE = {
   MOVEMENT_DATA: "movement_data_id_seq",
   DEVICE: "device_id_seq",
   FEEDBACK: "feedback_id_seq",
+  APPOINTMENT: "appointment_id_seq",
 } as const;

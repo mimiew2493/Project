@@ -1,13 +1,14 @@
 import { db } from '@/src/db'
 import { users } from '@/src/db/schema/users'
 import { occupationalTherapists } from '@/src/db/schema/occupationalTherapist'
-import { patients } from '@/src/db/schema/patients'
+import { appointments } from '@/src/db/schema/appointments'
 import { NextResponse } from 'next/server'
-import { eq, sql } from 'drizzle-orm'
+import { eq, countDistinct } from 'drizzle-orm'
+import { DEFAULT_PASSWORD, hashPassword } from '@/src/utils/password'
 
 const cors = {
   'Access-Control-Allow-Origin': 'http://localhost:5173',
-  'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE',
+  'Access-Control-Allow-Methods': 'GET, POST, PATCH, DELETE',
   'Access-Control-Allow-Headers': 'Content-Type',
 }
 
@@ -26,9 +27,12 @@ export async function GET() {
         first_name: users.first_name,
         last_name: users.last_name,
         phone: users.phone,
+        cases: countDistinct(appointments.patient_id),
       })
       .from(occupationalTherapists)
       .innerJoin(users, eq(occupationalTherapists.users_id, users.users_id))
+      .leftJoin(appointments, eq(appointments.ot_id, occupationalTherapists.ot_id))
+      .groupBy(occupationalTherapists.ot_id, users.users_id)
 
     return NextResponse.json(result, { headers: cors })
   } catch (error: any) {
@@ -49,7 +53,7 @@ export async function POST(req: Request) {
       users_id: usersId,
       role_id: 'R002',
       username: body.phone || `ot${timestamp}`,
-      password: '1234',
+      password: await hashPassword(DEFAULT_PASSWORD),
       first_name: body.firstName,
       last_name: body.lastName,
       phone: body.phone || null,
@@ -72,6 +76,62 @@ export async function POST(req: Request) {
       users_id: usersId,
     }, { status: 201, headers: cors })
 
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 500, headers: cors })
+  }
+}
+
+// PATCH /api/therapists — แก้ไขข้อมูลนักกายภาพ
+export async function PATCH(req: Request) {
+  try {
+    const body = await req.json()
+    if (!body.otId || !body.usersId) {
+      return NextResponse.json({ error: 'ต้องระบุ otId และ usersId' }, { status: 400, headers: cors })
+    }
+
+    const userPatch: Record<string, unknown> = {}
+    if (body.firstName !== undefined) userPatch.first_name = body.firstName
+    if (body.lastName !== undefined) userPatch.last_name = body.lastName
+    if (body.phone !== undefined) userPatch.phone = body.phone || null
+    if (body.email !== undefined) userPatch.email = body.email || null
+    if (body.gender !== undefined) userPatch.gender = body.gender || null
+    if (body.newPassword) userPatch.password = await hashPassword(body.newPassword)
+    if (Object.keys(userPatch).length > 0) {
+      await db.update(users).set(userPatch).where(eq(users.users_id, body.usersId))
+    }
+
+    if (body.licenseNumber !== undefined) {
+      await db
+        .update(occupationalTherapists)
+        .set({ license_number: body.licenseNumber })
+        .where(eq(occupationalTherapists.ot_id, body.otId))
+    }
+
+    return NextResponse.json({ message: 'แก้ไขข้อมูลนักกายภาพสำเร็จ' }, { headers: cors })
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 500, headers: cors })
+  }
+}
+
+// DELETE /api/therapists?ot_id=OT000001 → ลบนักกายภาพ (ลบ users ต้นทาง cascade ไปที่ occupational_therapists)
+export async function DELETE(req: Request) {
+  try {
+    const otId = new URL(req.url).searchParams.get('ot_id')
+    if (!otId) {
+      return NextResponse.json({ error: 'ต้องระบุ ot_id' }, { status: 400, headers: cors })
+    }
+
+    const [therapist] = await db
+      .select({ users_id: occupationalTherapists.users_id })
+      .from(occupationalTherapists)
+      .where(eq(occupationalTherapists.ot_id, otId))
+    if (!therapist) {
+      return NextResponse.json({ error: 'ไม่พบนักกายภาพ' }, { status: 404, headers: cors })
+    }
+
+    await db.delete(users).where(eq(users.users_id, therapist.users_id))
+
+    return NextResponse.json({ message: 'ลบนักกายภาพสำเร็จ' }, { headers: cors })
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500, headers: cors })
   }

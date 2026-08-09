@@ -1,7 +1,0 @@
-import PageHeader from '../components/PageHeader'
-const bars = [64,70,78,74,83,81,86]
-export default function OverviewPage() { return <>
-  <PageHeader title="ภาพรวมศูนย์" subtitle="สรุปผลการให้บริการ ผู้ป่วยใหม่ และภาระงานของบุคลากร" action={<div className="date-range"><button className="btn">01/07/2569</button><button className="btn">31/07/2569</button></div>}/>
-  <div className="stats-row overview"><div className="stat"><span>ผู้รับบริการทั้งหมด</span><strong>128</strong><small>คน</small></div><div className="stat"><span>ผู้ป่วยใหม่เดือนนี้</span><strong>12</strong><small className="positive">▲ 12% จากเดือนก่อน</small></div><div className="stat"><span>อัตราการใช้ต่อเนื่อง</span><strong>78%</strong><small>เฉลี่ย 5 วันต่อสัปดาห์</small></div></div>
-  <div className="overview-grid"><section className="panel chart-card"><h2>จำนวนผู้ป่วยรายเดือน (ปี 2569)</h2><div className="bar-chart">{bars.map((b,i)=><div className="bar-wrap" key={i}><div className="bar" style={{height:`${b}%`}}/><span>{['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.'][i]}</span></div>)}</div></section><section className="panel workload"><h2>ภาระงานผู้ดูแลเคส</h2>{[['กภ. วิน รักษา','4 เคส'],['กภ. โบ อิ่มอุ่น','6 เคส'],['กภ. หญิง ใจดี','3 เคส'],['ยังไม่มอบหมาย','2 เคส']].map((x,i)=><div className="work-row" key={x[0]}><span>{x[0]}</span><b className={i===3?'danger':''}>{x[1]}</b></div>)}<div className="warning">มีเคส “ยังไม่มอบหมาย” ควรจัดสรรผู้ดูแลก่อนสิ้นวัน</div></section></div>
-</> }

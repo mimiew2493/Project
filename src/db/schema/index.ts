@@ -9,4 +9,5 @@ export * from "./therapySession";
 export * from "./movementData";
 export * from "./devices";
 export * from "./feedback";
+export * from "./appointments";
 export * from "./relations";

@@ -1,0 +1,170 @@
+import { useEffect, useMemo, useState } from 'react'
+import type { PatientAppointment } from '../../types'
+import SideBadge from '../../components/SideBadge'
+
+const TIMES = ['08', '09', '10', '11', '12', '13', '14', '15', '16']
+const DAY_LABELS = ['จ', 'อ', 'พ', 'พฤ', 'ศ']
+
+const fmt = (iso: string) =>
+  new Date(iso).toLocaleString('th-TH', { dateStyle: 'medium', timeStyle: 'short' })
+
+const startOfWeek = (base: Date) => {
+  const d = new Date(base)
+  const day = d.getDay()
+  const diff = (day === 0 ? -6 : 1) - day
+  d.setDate(d.getDate() + diff)
+  d.setHours(0, 0, 0, 0)
+  return d
+}
+
+interface Props { lockOtId?: string }
+
+export default function SchedulePage({ lockOtId }: Props) {
+  const [filterOt, setFilterOt] = useState('all')
+  const [weekOffset, setWeekOffset] = useState(0)
+  const [allSaved, setAllSaved] = useState<PatientAppointment[]>([])
+
+  useEffect(() => {
+    fetch('http://localhost:3000/api/appointments')
+      .then(r => r.json())
+      .then(d => { if (Array.isArray(d)) setAllSaved(d) })
+      .catch(() => {})
+  }, [])
+
+  const saved = lockOtId ? allSaved.filter(a => a.ot_id === lockOtId) : allSaved
+
+  const weekDays = useMemo(() => {
+    const monday = startOfWeek(new Date())
+    monday.setDate(monday.getDate() + weekOffset * 7)
+    return Array.from({ length: 5 }, (_, i) => { const d = new Date(monday); d.setDate(monday.getDate() + i); return d })
+  }, [weekOffset])
+
+  const weekLabel = `${weekDays[0].getDate()} – ${weekDays[4].toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' })}`
+
+  const therapistOptions = useMemo(() => {
+    const map = new Map<string, string>()
+    saved.forEach(a => { if (a.ot_id) map.set(a.ot_id, `กภ. ${a.therapist_name ?? ''} ${a.therapist_lastname ?? ''}`.trim()) })
+    return Array.from(map.entries())
+  }, [saved])
+
+  const cellMap = useMemo(() => {
+    const map = new Map<string, PatientAppointment>()
+    saved.forEach(a => {
+      const d = new Date(a.appointment_date)
+      const dayIdx = weekDays.findIndex(wd => wd.toDateString() === d.toDateString())
+      if (dayIdx === -1) return
+      const hour = String(d.getHours()).padStart(2, '0')
+      map.set(`${hour}-${dayIdx}`, a)
+    })
+    return map
+  }, [saved, weekDays])
+
+  return (
+    <>
+      <div className="h-sec">
+        <div>
+          <h1 className="page-title">{lockOtId ? 'ตารางนัดของฉัน' : 'ตารางนัดรวมของศูนย์'}</h1>
+          <p className="page-sub">{lockOtId ? 'นัดหมายทั้งหมดที่มอบหมายให้คุณ' : 'ธุรการเห็นทุกคน ทุกนักกิจกรรมบำบัด — ใช้หาช่องว่างและกันนัดชนกัน'} · 🔧 = สถานะเครื่องกายภาพ</p>
+        </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn btn-ghost btn-sm" onClick={() => setWeekOffset(w => w - 1)}>← สัปดาห์ก่อน</button>
+          <span style={{ padding: '6px 12px', fontWeight: 600 }}>{weekLabel}</span>
+          <button className="btn btn-ghost btn-sm" onClick={() => setWeekOffset(w => w + 1)}>สัปดาห์ถัดไป →</button>
+          {weekOffset !== 0 && <button className="btn btn-ghost btn-sm" onClick={() => setWeekOffset(0)}>สัปดาห์นี้</button>}
+        </div>
+      </div>
+
+      {!lockOtId && (
+        <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap' }}>
+          <button className={`filter-pill ${filterOt === 'all' ? 'active' : ''}`} onClick={() => setFilterOt('all')}>ทุกนักกายภาพ</button>
+          {therapistOptions.map(([id, label]) => (
+            <button key={id} className={`filter-pill ${filterOt === id ? 'active' : ''}`} onClick={() => setFilterOt(id)}>{label}</button>
+          ))}
+        </div>
+      )}
+
+      <div className="card-0" style={{ overflowX: 'auto' }}>
+        <div className="time-grid" style={{ gridTemplateColumns: '70px repeat(5,1fr)' }}>
+          <div className="time-header" />
+          {weekDays.map((d, i) => <div key={i} className="time-header">{DAY_LABELS[i]} {d.getDate()}</div>)}
+          {TIMES.map(h => {
+            const isLunch = h === '12'
+            return (
+              <>
+                <div key={h + '-label'} className="time-label mono" style={isLunch ? { color: 'var(--rose)' } : {}}>
+                  {h}:00{isLunch ? <><br /><small>พักเที่ยง</small></> : <><br /><small>–{String(Number(h) + 1).padStart(2, '0')}:00</small></>}
+                </div>
+                {[0, 1, 2, 3, 4].map(ci => {
+                  if (isLunch) return <div key={ci} className="time-slot time-slot-lunch" />
+                  const a = cellMap.get(h + '-' + ci)
+                  if (a && (filterOt === 'all' || a.ot_id === filterOt)) {
+                    const deviceOk = a.device_status ? a.device_status === 'ACTIVE' : null
+                    return (
+                      <div key={ci} className="time-slot">
+                        <div className="appt-block" style={{ background: 'var(--blue-t)' }}>
+                          <b>{a.patient_name ? `${a.patient_name} ${a.patient_lastname ?? ''}`.trim() : a.patient_id}</b><br />
+                          <span style={{ color: 'var(--muted)' }}>{a.therapist_name ? `กภ. ${a.therapist_name}` : 'ยังไม่มอบหมาย'} · {a.duration_min} นาที</span>
+                          {a.device_id && (
+                            <div className="device-check">🔧 {a.device_id} {deviceOk === null ? '' : deviceOk ? '✓' : '⚠ ไม่ส่งข้อมูล'}</div>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  }
+                  return <div key={ci} className="time-slot time-slot-empty">+ ว่าง</div>
+                })}
+              </>
+            )
+          })}
+        </div>
+      </div>
+
+      <div className="h-sec" style={{ marginTop: 22 }}>
+        <div>
+          <h2 className="page-title" style={{ fontSize: 18 }}>นัดที่บันทึกไว้ในระบบ</h2>
+          <p className="page-sub">ดึงจากตาราง appointments — นัดของผู้ป่วยแต่ละคนพร้อมข้างที่รักษา</p>
+        </div>
+        <span className="pill">{saved.length} นัด</span>
+      </div>
+
+      {saved.length === 0 ? (
+        <div className="empty-box">
+          <div className="empty-icon">📅</div>
+          <div className="empty-title">ยังไม่มีนัดที่บันทึกไว้</div>
+          <div className="empty-sub">นัดจะถูกสร้างเมื่อลงทะเบียนผู้ป่วยใหม่และเลือกวัน/เวลานัด</div>
+        </div>
+      ) : (
+        <div className="stack">
+          {saved.map(a => (
+            <div className="patient-card" key={a.appointment_id}>
+              <div className="patient-top">
+                <div className="patient-identity">
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
+                      <span className="patient-name">{a.patient_name ? `${a.patient_name} ${a.patient_lastname ?? ''}` : a.patient_id}</span>
+                      <SideBadge side={a.treated_side ?? a.affected_side} />
+                    </div>
+                    <div className="patient-meta">
+                      🗓 {fmt(a.appointment_date)} · {a.duration_min} นาที
+                      {a.therapist_name ? ` · กภ. ${a.therapist_name}` : ''}
+                      {a.device_id ? ` · 🔧 ${a.device_id}` : ''}
+                      {a.note ? ` · ${a.note}` : ''}
+                    </div>
+                  </div>
+                </div>
+                <div className="patient-actions">
+                  <span className={`pill ${a.status === 'SCHEDULED' ? 'pill-amber' : ''}`}>{a.status}</span>
+                  <span className="mono" style={{ fontSize: 11, color: 'var(--muted)' }}>{a.appointment_id}</span>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="note" style={{ marginTop: 14 }}>
+        <b>สัญลักษณ์:</b> 🔧✓ = อุปกรณ์พร้อม · 🔧⚠ = ไม่ส่งข้อมูล (ต้องตรวจ) · 🔧⛔ = ส่งซ่อม (ต้องเปลี่ยนเครื่อง)
+      </div>
+    </>
+  )
+}

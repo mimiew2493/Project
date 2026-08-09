@@ -11,6 +11,7 @@ import { therapySessions } from "./therapySession";
 import { movementData } from "./movementData";
 import { devices } from "./devices";
 import { feedback } from "./feedback";
+import { appointments } from "./appointments";
 
 /* ===========================
    Roles
@@ -48,6 +49,8 @@ export const patientsRelations = relations(patients, ({ one, many }) => ({
   }),
 
   patientPrograms: many(patientPrograms),
+
+  appointments: many(appointments),
 }));
 
 /* ===========================
@@ -65,6 +68,8 @@ export const occupationalTherapistsRelations = relations(
     programs: many(programs),
 
     assignedPrograms: many(patientPrograms),
+
+    appointments: many(appointments),
   })
 );
 
@@ -164,6 +169,8 @@ export const movementDataRelations = relations(
 
 export const devicesRelations = relations(devices, ({ many }) => ({
   movementData: many(movementData),
+
+  appointments: many(appointments),
 }));
 
 /* ===========================
@@ -174,5 +181,26 @@ export const feedbackRelations = relations(feedback, ({ one }) => ({
   therapySession: one(therapySessions, {
     fields: [feedback.session_id],
     references: [therapySessions.session_id],
+  }),
+}));
+
+/* ===========================
+   Appointments
+=========================== */
+
+export const appointmentsRelations = relations(appointments, ({ one }) => ({
+  patient: one(patients, {
+    fields: [appointments.patient_id],
+    references: [patients.patient_id],
+  }),
+
+  therapist: one(occupationalTherapists, {
+    fields: [appointments.ot_id],
+    references: [occupationalTherapists.ot_id],
+  }),
+
+  device: one(devices, {
+    fields: [appointments.device_id],
+    references: [devices.device_id],
   }),
 }));
