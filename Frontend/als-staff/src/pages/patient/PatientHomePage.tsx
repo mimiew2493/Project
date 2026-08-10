@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import type { Patient, PatientAppointment, Device } from '../../types'
 import SideBadge from '../../components/SideBadge'
+import { WaveIcon, CheckIcon, ToolIcon } from '../../components/Icon'
+import { API_BASE } from '../../config'
 
 interface Props { patientId: string }
 
@@ -16,9 +18,9 @@ export default function PatientHomePage({ patientId }: Props) {
 
   useEffect(() => {
     Promise.all([
-      fetch('http://localhost:3000/api/patients?status=ALL').then(r => r.json()),
-      fetch(`http://localhost:3000/api/appointments?patient_id=${patientId}`).then(r => r.json()),
-      fetch('http://localhost:3000/api/devices').then(r => r.json()),
+      fetch(`${API_BASE}/api/patients?status=ALL`).then(r => r.json()),
+      fetch(`${API_BASE}/api/appointments?patient_id=${patientId}`).then(r => r.json()),
+      fetch(`${API_BASE}/api/devices`).then(r => r.json()),
     ])
       .then(([p, a, d]) => {
         if (Array.isArray(p)) setPatient(p.find((x: Patient) => x.patient_id === patientId) ?? null)
@@ -41,11 +43,11 @@ export default function PatientHomePage({ patientId }: Props) {
   return (
     <div className="stack">
       <div className="hero-card">
-        <div style={{ fontSize: 19, fontWeight: 700 }}>สวัสดี, {name.split(' ')[0]} 👋</div>
+        <div style={{ fontSize: 19, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>สวัสดี, {name.split(' ')[0]} <WaveIcon size={20} /></div>
         <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>รหัส: {patient.patient_id}</div>
         <div style={{ marginTop: 10 }}>
           {patient.status === 'COMPLETED'
-            ? <span className="pill pill-green">✓ ลงทะเบียนครบแล้ว</span>
+            ? <span className="pill pill-green" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><CheckIcon size={11} /> ลงทะเบียนครบแล้ว</span>
             : <span className="pill pill-amber">อยู่ระหว่าง: {STEP_LABEL[patient.registration_step ?? 1] ?? '—'}</span>}
         </div>
       </div>
@@ -59,7 +61,7 @@ export default function PatientHomePage({ patientId }: Props) {
 
       {myDevice && (
         <div className="card" style={{ display: 'flex', gap: 11, alignItems: 'center', background: 'var(--green-t)', borderColor: '#d9e9d4' }}>
-          <div style={{ width: 34, height: 34, borderRadius: '50%', background: 'var(--green)', display: 'grid', placeItems: 'center', flexShrink: 0 }}>🔧</div>
+          <div style={{ width: 34, height: 34, borderRadius: '50%', background: 'var(--green)', color: '#fff', display: 'grid', placeItems: 'center', flexShrink: 0 }}><ToolIcon size={16} /></div>
           <div style={{ flex: 1 }}>
             <b style={{ fontSize: 12.5 }}>อุปกรณ์ของคุณ: {myDevice.device_name}</b>
             <div style={{ fontSize: 10.5, color: 'var(--muted)' }} className="mono">{myDevice.device_id}</div>

@@ -1,3 +1,5 @@
+import { CheckIcon } from './Icon'
+
 const LABELS = ['รับเรื่อง + ลงทะเบียน', 'นัดหมาย', 'จับคู่อุปกรณ์']
 
 export default function Stepper({ current }: { current: number }) {
@@ -9,7 +11,7 @@ export default function Stepper({ current }: { current: number }) {
         return (
           <div key={label} style={{ display: 'flex', alignItems: 'center', flex: 1 }}>
             <div className={cls}>
-              <span className="step-num">{n < current ? '✓' : n}</span>
+              <span className="step-num">{n < current ? <CheckIcon size={12} /> : n}</span>
               {label}
             </div>
             {i < LABELS.length - 1 && <div className="stepline" />}

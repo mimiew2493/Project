@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { AuthUser } from '../../types'
+import { API_BASE } from '../../config'
 
 interface Props { onLogin: (token: string, user: AuthUser) => void }
 
@@ -15,7 +16,7 @@ export default function LoginPage({ onLogin }: Props) {
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch('http://localhost:3000/api/auth/login', {
+      const res = await fetch(`${API_BASE}/api/auth/login`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password }),
       })

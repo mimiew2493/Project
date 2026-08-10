@@ -3,10 +3,17 @@ import type { Therapist, Device, PatientAppointment } from '../../types'
 import type { ResumeTarget } from '../../App'
 import Stepper from '../../components/Stepper'
 import SideBadge from '../../components/SideBadge'
+import { CheckCircleIcon, XCircleIcon, FileTextIcon, BarChartIcon, ClipboardIcon, ArrowLeftIcon, ArrowRightIcon, ArrowLeftRightIcon, CheckIcon } from '../../components/Icon'
+import { API_BASE } from '../../config'
 
 const TIMES = ['08', '09', '10', '11', '12', '13', '14', '15', '16']
 const DAY_LABELS = ['จ', 'อ', 'พ', 'พฤ', 'ศ']
 const STATUS_LABEL: Record<string, string> = { ACTIVE: 'ใช้งานได้', MAINTENANCE: 'ส่งซ่อม' }
+const EXPORT_FORMATS = [
+  { label: 'PDF', Icon: FileTextIcon },
+  { label: 'Excel', Icon: BarChartIcon },
+  { label: 'CSV', Icon: ClipboardIcon },
+]
 
 const startOfWeek = (base: Date) => {
   const d = new Date(base)
@@ -47,18 +54,18 @@ export default function RegisterPage({ step, setStep, onBack, resume }: Props) {
   const [result, setResult] = useState<{ success: boolean; message: string; patientId?: string; appointmentId?: string | null } | null>(null)
 
   useEffect(() => {
-    fetch('http://localhost:3000/api/therapists')
+    fetch(`${API_BASE}/api/therapists`)
       .then(r => r.json()).then(d => { if (Array.isArray(d)) setTherapists(d) }).catch(() => {})
-    fetch('http://localhost:3000/api/devices')
+    fetch(`${API_BASE}/api/devices`)
       .then(r => r.json()).then(d => { if (Array.isArray(d)) setDevices(d) }).catch(() => {})
-    fetch('http://localhost:3000/api/appointments')
+    fetch(`${API_BASE}/api/appointments`)
       .then(r => r.json()).then(d => { if (Array.isArray(d)) setOtherAppts(d) }).catch(() => {})
   }, [])
 
   useEffect(() => {
     if (!resume) return
     setLoadingResume(true)
-    fetch(`http://localhost:3000/api/register?patient_id=${resume.patientId}`)
+    fetch(`${API_BASE}/api/register?patient_id=${resume.patientId}`)
       .then(r => r.json())
       .then(d => {
         if (d.error) return
@@ -120,7 +127,7 @@ export default function RegisterPage({ step, setStep, onBack, resume }: Props) {
     try {
       let currentIds = ids
       if (!currentIds) {
-        const res = await fetch('http://localhost:3000/api/register', {
+        const res = await fetch(`${API_BASE}/api/register`, {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ firstName: form.firstName, lastName: form.lastName, phone: form.phone }),
         })
@@ -129,7 +136,7 @@ export default function RegisterPage({ step, setStep, onBack, resume }: Props) {
         currentIds = { patientId: data.patient_id, usersId: data.users_id }
         setIds(currentIds)
       }
-      const res2 = await fetch('http://localhost:3000/api/register', {
+      const res2 = await fetch(`${API_BASE}/api/register`, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           patientId: currentIds.patientId, usersId: currentIds.usersId, step: 1,
@@ -152,7 +159,7 @@ export default function RegisterPage({ step, setStep, onBack, resume }: Props) {
     if (!ids) { alert('เกิดข้อผิดพลาด กรุณาเริ่มจากขั้นที่ 1'); return }
     setSaving(true)
     try {
-      const res = await fetch('http://localhost:3000/api/register', {
+      const res = await fetch(`${API_BASE}/api/register`, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           patientId: ids.patientId, usersId: ids.usersId, step: 2, appointmentId: apptId,
@@ -173,7 +180,7 @@ export default function RegisterPage({ step, setStep, onBack, resume }: Props) {
     if (!ids) { alert('เกิดข้อผิดพลาด กรุณาเริ่มจากขั้นที่ 1'); return }
     setSaving(true)
     try {
-      const res = await fetch('http://localhost:3000/api/register', {
+      const res = await fetch(`${API_BASE}/api/register`, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           patientId: ids.patientId, usersId: ids.usersId, step: 3,
@@ -196,7 +203,9 @@ export default function RegisterPage({ step, setStep, onBack, resume }: Props) {
 
   if (result) return (
     <div style={{ padding: 60, textAlign: 'center' }}>
-      <div style={{ fontSize: 56, marginBottom: 16 }}>{result.success ? '✅' : '❌'}</div>
+      <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 16, color: result.success ? 'var(--green)' : 'var(--rose)' }}>
+        {result.success ? <CheckCircleIcon size={56} /> : <XCircleIcon size={56} />}
+      </div>
       <h2 style={{ marginBottom: 8 }}>{result.message}</h2>
       {result.success && (
         <>
@@ -208,8 +217,10 @@ export default function RegisterPage({ step, setStep, onBack, resume }: Props) {
             </p>
           )}
           <div className="export-row" style={{ justifyContent: 'center', marginTop: 16 }}>
-            {['📄 PDF','📊 Excel','📋 CSV'].map(t => (
-              <button key={t} className="export-btn" onClick={() => alert('Export ' + t + '...')}><span className="export-icon">{t.split(' ')[0]}</span>{t.split(' ')[1]}</button>
+            {EXPORT_FORMATS.map(({ label, Icon }) => (
+              <button key={label} className="export-btn" onClick={() => alert('Export ' + label + '...')}>
+                <span className="export-icon"><Icon size={20} /></span>{label}
+              </button>
             ))}
           </div>
         </>
@@ -265,7 +276,7 @@ export default function RegisterPage({ step, setStep, onBack, resume }: Props) {
                 <div className="side-selector">
                   {(['ข้างซ้าย', 'ข้างขวา', 'ทั้งสองข้าง'] as Side[]).map(s => (
                     <button key={s} className={`side-btn ${side === s ? 'active' : ''}`} onClick={() => setSide(s)}>
-                      <span className="side-icon">{s === 'ข้างซ้าย' ? '🫲' : s === 'ข้างขวา' ? '🫱' : '🤲'}</span>
+                      <span className="side-icon">{s === 'ข้างซ้าย' ? <ArrowLeftIcon size={22} /> : s === 'ข้างขวา' ? <ArrowRightIcon size={22} /> : <ArrowLeftRightIcon size={22} />}</span>
                       {s}
                     </button>
                   ))}
@@ -339,7 +350,7 @@ export default function RegisterPage({ step, setStep, onBack, resume }: Props) {
                     return (
                       <div key={ci} className="time-slot time-slot-empty" style={{ cursor: 'pointer' }}
                            onClick={() => setAppt(p => ({ ...p, date: d.toISOString().slice(0, 10), time: `${h}:00` }))}>
-                        {isSelected ? '✓ เลือกแล้ว' : '+ ว่าง'}
+                        {isSelected ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><CheckIcon size={12} /> เลือกแล้ว</span> : '+ ว่าง'}
                       </div>
                     )
                   })}
@@ -410,8 +421,8 @@ export default function RegisterPage({ step, setStep, onBack, resume }: Props) {
             <div className="h-sec" style={{ marginTop: 16 }}><span className="h-sec-title">Export ผลการรักษา</span></div>
             <p style={{ fontSize: 11.5, color: 'var(--muted)', marginBottom: 10 }}>ดาวน์โหลดข้อมูลการรักษาได้ที่นี่</p>
             <div className="export-row">
-              {[['📄','PDF'],['📊','Excel'],['📋','CSV']].map(([icon,label])=>(
-                <button key={label} className="export-btn" onClick={() => alert('Export ' + label + '...')}><span className="export-icon">{icon}</span>{label}</button>
+              {EXPORT_FORMATS.map(({ label, Icon }) => (
+                <button key={label} className="export-btn" onClick={() => alert('Export ' + label + '...')}><span className="export-icon"><Icon size={20} /></span>{label}</button>
               ))}
             </div>
           </div>
@@ -429,7 +440,9 @@ export default function RegisterPage({ step, setStep, onBack, resume }: Props) {
             <div className="note note-pdpa"><b>PDPA</b> — ข้อมูลสุขภาพเป็นข้อมูลอ่อนไหว ต้องบันทึกความยินยอมก่อน</div>
             <div className="form-actions">
               <button className="btn btn-ghost" onClick={() => setStep(2)} disabled={saving}>← ย้อนกลับ</button>
-              <button className="btn btn-success" onClick={finish} disabled={saving}>{saving ? 'กำลังบันทึก...' : '✓ ยืนยันและเสร็จสิ้น'}</button>
+              <button className="btn btn-success" onClick={finish} disabled={saving}>
+                {saving ? 'กำลังบันทึก...' : <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><CheckIcon size={14} /> ยืนยันและเสร็จสิ้น</span>}
+              </button>
             </div>
           </div>
         </div>

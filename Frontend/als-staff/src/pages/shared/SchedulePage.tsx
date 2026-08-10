@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { PatientAppointment } from '../../types'
 import SideBadge from '../../components/SideBadge'
+import { ToolIcon, CheckIcon, AlertTriangleIcon, CalendarIcon, XCircleIcon } from '../../components/Icon'
+import { API_BASE } from '../../config'
 
 const TIMES = ['08', '09', '10', '11', '12', '13', '14', '15', '16']
 const DAY_LABELS = ['จ', 'อ', 'พ', 'พฤ', 'ศ']
@@ -25,7 +27,7 @@ export default function SchedulePage({ lockOtId }: Props) {
   const [allSaved, setAllSaved] = useState<PatientAppointment[]>([])
 
   useEffect(() => {
-    fetch('http://localhost:3000/api/appointments')
+    fetch(`${API_BASE}/api/appointments`)
       .then(r => r.json())
       .then(d => { if (Array.isArray(d)) setAllSaved(d) })
       .catch(() => {})
@@ -64,7 +66,9 @@ export default function SchedulePage({ lockOtId }: Props) {
       <div className="h-sec">
         <div>
           <h1 className="page-title">{lockOtId ? 'ตารางนัดของฉัน' : 'ตารางนัดรวมของศูนย์'}</h1>
-          <p className="page-sub">{lockOtId ? 'นัดหมายทั้งหมดที่มอบหมายให้คุณ' : 'ธุรการเห็นทุกคน ทุกนักกิจกรรมบำบัด — ใช้หาช่องว่างและกันนัดชนกัน'} · 🔧 = สถานะเครื่องกายภาพ</p>
+          <p className="page-sub" style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
+            {lockOtId ? 'นัดหมายทั้งหมดที่มอบหมายให้คุณ' : 'ธุรการเห็นทุกคน ทุกนักกิจกรรมบำบัด — ใช้หาช่องว่างและกันนัดชนกัน'} · <ToolIcon size={12} /> = สถานะเครื่องกายภาพ
+          </p>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <button className="btn btn-ghost btn-sm" onClick={() => setWeekOffset(w => w - 1)}>← สัปดาห์ก่อน</button>
@@ -105,7 +109,7 @@ export default function SchedulePage({ lockOtId }: Props) {
                           <b>{a.patient_name ? `${a.patient_name} ${a.patient_lastname ?? ''}`.trim() : a.patient_id}</b><br />
                           <span style={{ color: 'var(--muted)' }}>{a.therapist_name ? `กภ. ${a.therapist_name}` : 'ยังไม่มอบหมาย'} · {a.duration_min} นาที</span>
                           {a.device_id && (
-                            <div className="device-check">🔧 {a.device_id} {deviceOk === null ? '' : deviceOk ? '✓' : '⚠ ไม่ส่งข้อมูล'}</div>
+                            <div className="device-check"><ToolIcon size={11} /> {a.device_id} {deviceOk === null ? '' : deviceOk ? <CheckIcon size={11} /> : <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2 }}><AlertTriangleIcon size={11} /> ไม่ส่งข้อมูล</span>}</div>
                           )}
                         </div>
                       </div>
@@ -129,7 +133,7 @@ export default function SchedulePage({ lockOtId }: Props) {
 
       {saved.length === 0 ? (
         <div className="empty-box">
-          <div className="empty-icon">📅</div>
+          <div className="empty-icon"><CalendarIcon size={48} /></div>
           <div className="empty-title">ยังไม่มีนัดที่บันทึกไว้</div>
           <div className="empty-sub">นัดจะถูกสร้างเมื่อลงทะเบียนผู้ป่วยใหม่และเลือกวัน/เวลานัด</div>
         </div>
@@ -144,10 +148,10 @@ export default function SchedulePage({ lockOtId }: Props) {
                       <span className="patient-name">{a.patient_name ? `${a.patient_name} ${a.patient_lastname ?? ''}` : a.patient_id}</span>
                       <SideBadge side={a.treated_side ?? a.affected_side} />
                     </div>
-                    <div className="patient-meta">
-                      🗓 {fmt(a.appointment_date)} · {a.duration_min} นาที
+                    <div className="patient-meta" style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
+                      <CalendarIcon size={11} /> {fmt(a.appointment_date)} · {a.duration_min} นาที
                       {a.therapist_name ? ` · กภ. ${a.therapist_name}` : ''}
-                      {a.device_id ? ` · 🔧 ${a.device_id}` : ''}
+                      {a.device_id ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>· <ToolIcon size={11} /> {a.device_id}</span> : ''}
                       {a.note ? ` · ${a.note}` : ''}
                     </div>
                   </div>
@@ -162,8 +166,11 @@ export default function SchedulePage({ lockOtId }: Props) {
         </div>
       )}
 
-      <div className="note" style={{ marginTop: 14 }}>
-        <b>สัญลักษณ์:</b> 🔧✓ = อุปกรณ์พร้อม · 🔧⚠ = ไม่ส่งข้อมูล (ต้องตรวจ) · 🔧⛔ = ส่งซ่อม (ต้องเปลี่ยนเครื่อง)
+      <div className="note" style={{ marginTop: 14, display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap' }}>
+        <b>สัญลักษณ์:</b>
+        <ToolIcon size={12} /><CheckIcon size={12} /> = อุปกรณ์พร้อม ·
+        <ToolIcon size={12} /><AlertTriangleIcon size={12} /> = ไม่ส่งข้อมูล (ต้องตรวจ) ·
+        <ToolIcon size={12} /><XCircleIcon size={12} /> = ส่งซ่อม (ต้องเปลี่ยนเครื่อง)
       </div>
     </>
   )

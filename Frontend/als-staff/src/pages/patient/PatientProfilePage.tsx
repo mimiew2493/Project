@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { AuthUser, Patient } from '../../types'
+import { API_BASE } from '../../config'
 
 interface Props { user: AuthUser; onLogout: () => void }
 
@@ -16,7 +17,7 @@ export default function PatientProfilePage({ user, onLogout }: Props) {
   const [toast, setToast] = useState<string | null>(null)
 
   useEffect(() => {
-    fetch('http://localhost:3000/api/patients?status=ALL')
+    fetch(`${API_BASE}/api/patients?status=ALL`)
       .then(r => r.json())
       .then(d => { if (Array.isArray(d)) setPatient(d.find((p: Patient) => p.patient_id === user.patient_id) ?? null) })
       .catch(() => {})
@@ -29,7 +30,7 @@ export default function PatientProfilePage({ user, onLogout }: Props) {
     if (!newPassword || newPassword.length < 4) { alert('รหัสผ่านต้องมีอย่างน้อย 4 ตัวอักษร'); return }
     if (newPassword !== confirmPassword) { alert('รหัสผ่านใหม่ทั้งสองช่องไม่ตรงกัน'); return }
     setSaving(true)
-    const res = await fetch('http://localhost:3000/api/register', {
+    const res = await fetch(`${API_BASE}/api/register`, {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ patientId: user.patient_id, usersId: user.users_id, newPassword }),
     }).catch(() => null)

@@ -157,7 +157,7 @@ input, select, textarea { font-family: inherit; }
 /* States */
 .loading-box { padding: 60px; text-align: center; color: var(--muted); }
 .empty-box { padding: 60px; text-align: center; }
-.empty-icon { font-size: 48px; margin-bottom: 12px; }
+.empty-icon { display: flex; justify-content: center; color: var(--muted); margin-bottom: 12px; }
 .empty-title { font-weight: 700; font-size: 15px; margin-bottom: 6px; }
 .empty-sub { font-size: 12px; color: var(--muted); }
 
@@ -179,12 +179,11 @@ input, select, textarea { font-family: inherit; }
 
 /* Patient mobile shell */
 .patient-shell { display: flex; flex-direction: column; height: 100vh; max-width: 480px; margin: 0 auto; background: var(--canvas); border-left: 1px solid var(--line); border-right: 1px solid var(--line); }
-.patient-topbar { padding: 14px 18px; background: var(--paper); border-bottom: 1px solid var(--line); flex-shrink: 0; }
+.patient-topbar { padding: 14px 18px; background: var(--paper); border-bottom: 1px solid var(--line); flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .patient-topbar h1 { font-size: 16px; font-weight: 700; color: var(--blue); }
 .patient-topbar p { font-size: 11px; color: var(--muted); margin-top: 2px; }
 .patient-content { flex: 1; overflow-y: auto; padding: 16px 16px 24px; }
 .tab-bar { display: flex; border-top: 1px solid var(--line); background: var(--paper); flex-shrink: 0; padding-bottom: env(safe-area-inset-bottom, 0); }
 .tab-btn { flex: 1; border: 0; background: none; font: inherit; padding: 9px 0 11px; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 3px; color: var(--muted); font-size: 10.5px; }
 .tab-btn.active { color: var(--blue); font-weight: 600; }
-.tab-icon { font-size: 18px; }
 .hero-card { background: linear-gradient(135deg, var(--blue-t), var(--green-t)); border-radius: var(--r-m); padding: 18px; border: 1px solid #e0e9f1; }

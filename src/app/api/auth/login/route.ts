@@ -9,7 +9,7 @@ import { NextResponse } from 'next/server'
 import jwt from 'jsonwebtoken'
 
 const cors = {
-  'Access-Control-Allow-Origin': 'http://localhost:5173',
+  'Access-Control-Allow-Origin': process.env.ALLOWED_ORIGIN || 'http://localhost:5173',
   'Access-Control-Allow-Methods': 'POST',
   'Access-Control-Allow-Headers': 'Content-Type',
 }

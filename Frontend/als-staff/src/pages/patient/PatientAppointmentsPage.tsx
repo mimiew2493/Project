@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import type { PatientAppointment } from '../../types'
 import SideBadge from '../../components/SideBadge'
+import { CalendarIcon, ToolIcon } from '../../components/Icon'
+import { API_BASE } from '../../config'
 
 interface Props { patientId: string }
 
@@ -11,7 +13,7 @@ export default function PatientAppointmentsPage({ patientId }: Props) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    fetch(`http://localhost:3000/api/appointments?patient_id=${patientId}`)
+    fetch(`${API_BASE}/api/appointments?patient_id=${patientId}`)
       .then(r => r.json())
       .then(d => { if (Array.isArray(d)) setAppts(d) })
       .catch(() => {})
@@ -31,7 +33,7 @@ export default function PatientAppointmentsPage({ patientId }: Props) {
 
       {sorted.length === 0 ? (
         <div className="empty-box">
-          <div className="empty-icon">📅</div>
+          <div className="empty-icon"><CalendarIcon size={48} /></div>
           <div className="empty-title">ยังไม่มีนัดหมาย</div>
         </div>
       ) : (
@@ -49,7 +51,7 @@ export default function PatientAppointmentsPage({ patientId }: Props) {
               </div>
               <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 8 }}>
                 <SideBadge side={a.treated_side ?? a.affected_side} />
-                {a.device_id && <span style={{ fontSize: 10.5, color: 'var(--muted)' }}>🔧 {a.device_id}</span>}
+                {a.device_id && <span style={{ fontSize: 10.5, color: 'var(--muted)', display: 'inline-flex', alignItems: 'center', gap: 3 }}><ToolIcon size={11} /> {a.device_id}</span>}
               </div>
               {a.note && <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 6 }}>{a.note}</div>}
             </div>

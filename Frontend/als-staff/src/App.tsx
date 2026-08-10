@@ -14,6 +14,7 @@ import ProfilePage from './pages/therapist/ProfilePage'
 import PatientHomePage from './pages/patient/PatientHomePage'
 import PatientAppointmentsPage from './pages/patient/PatientAppointmentsPage'
 import PatientStatsPage from './pages/patient/PatientStatsPage'
+import PatientFeedbackPage from './pages/patient/PatientFeedbackPage'
 import PatientProfilePage from './pages/patient/PatientProfilePage'
 
 export interface ResumeTarget { patientId: string; usersId: string }
@@ -22,7 +23,7 @@ interface Session { token: string; user: AuthUser }
 
 const STAFF_PAGES: PageKey[] = ['queue', 'register', 'therapists', 'devices', 'schedule', 'overview']
 const THERAPIST_PAGES: PageKey[] = ['my-cases', 'my-schedule', 'my-profile']
-const PATIENT_PAGES: PageKey[] = ['patient-home', 'patient-appointments', 'patient-stats', 'patient-profile']
+const PATIENT_PAGES: PageKey[] = ['patient-home', 'patient-appointments', 'patient-stats', 'patient-feedback', 'patient-profile']
 
 const loadSession = (): Session | null => {
   const raw = localStorage.getItem('als-session')
@@ -68,13 +69,17 @@ export default function App() {
     return (
       <div className="patient-shell">
         <div className="patient-topbar">
-          <h1>ALS Rehab</h1>
-          <p>ระบบติดตามการฝึกและนัดหมาย</p>
+          <div>
+            <h1>ALS Rehab</h1>
+            <p>ระบบติดตามการฝึกและนัดหมาย</p>
+          </div>
+          <button className="btn btn-ghost btn-sm" onClick={handleLogout}>ออกจากระบบ</button>
         </div>
         <div className="patient-content">
           {effectivePage === 'patient-home'         && <PatientHomePage patientId={patientId} />}
           {effectivePage === 'patient-appointments' && <PatientAppointmentsPage patientId={patientId} />}
           {effectivePage === 'patient-stats'        && <PatientStatsPage patientId={patientId} />}
+          {effectivePage === 'patient-feedback'     && <PatientFeedbackPage patientId={patientId} />}
           {effectivePage === 'patient-profile'      && <PatientProfilePage user={session.user} onLogout={handleLogout} />}
         </div>
         <PatientTabBar page={effectivePage} onNavigate={goto} />
@@ -97,7 +102,7 @@ export default function App() {
           {!isTherapist && effectivePage === 'devices'    && <DevicesPage />}
           {!isTherapist && effectivePage === 'schedule'   && <SchedulePage />}
           {!isTherapist && effectivePage === 'overview'   && <OverviewPage />}
-          {isTherapist && effectivePage === 'my-cases'    && <MyCasesPage otId={session.user.ot_id ?? ''} />}
+          {isTherapist && effectivePage === 'my-cases'    && <MyCasesPage otId={session.user.ot_id ?? ''} usersId={session.user.users_id} />}
           {isTherapist && effectivePage === 'my-schedule' && <SchedulePage lockOtId={session.user.ot_id ?? undefined} />}
           {isTherapist && effectivePage === 'my-profile'  && <ProfilePage user={session.user} onLogout={handleLogout} />}
         </div>

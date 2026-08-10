@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import type { Therapist } from '../../types'
 import SearchBar from '../../components/SearchBar'
+import { XIcon } from '../../components/Icon'
+import { API_BASE } from '../../config'
 
 interface FormData { firstName: string; lastName: string; licenseNumber: string; phone: string; email: string; gender: string }
 const emptyForm: FormData = { firstName:'', lastName:'', licenseNumber:'', phone:'', email:'', gender:'' }
@@ -19,7 +21,7 @@ export default function TherapistsPage() {
   const [toast, setToast] = useState<string | null>(null)
 
   const load = () => {
-    fetch('http://localhost:3000/api/therapists')
+    fetch(`${API_BASE}/api/therapists`)
       .then(r => r.json()).then(d => { if (Array.isArray(d)) setTherapists(d); setLoading(false) }).catch(() => setLoading(false))
   }
   useEffect(load, [])
@@ -41,11 +43,11 @@ export default function TherapistsPage() {
     if (!form.firstName || !form.lastName || !form.licenseNumber || !form.phone) { alert('กรุณากรอกข้อมูลที่จำเป็นให้ครบ'); return }
     setSaving(true)
     const res = editing
-      ? await fetch('http://localhost:3000/api/therapists', {
+      ? await fetch(`${API_BASE}/api/therapists`, {
           method: 'PATCH', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ otId: editing.ot_id, usersId: editing.users_id, ...form }),
         }).catch(() => null)
-      : await fetch('http://localhost:3000/api/therapists', {
+      : await fetch(`${API_BASE}/api/therapists`, {
           method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form)
         }).catch(() => null)
     if (res?.ok) { showToast(editing ? 'แก้ไขข้อมูลสำเร็จ!' : 'เพิ่มนักกายภาพสำเร็จ!'); closeForm(); load() }
@@ -55,7 +57,7 @@ export default function TherapistsPage() {
 
   const removeTherapist = async (t: Therapist) => {
     if (!confirm(`ยืนยันลบ กภ. ${t.first_name} ${t.last_name} (${t.ot_id})? การลบไม่สามารถย้อนกลับได้`)) return
-    const res = await fetch(`http://localhost:3000/api/therapists?ot_id=${t.ot_id}`, { method: 'DELETE' }).catch(() => null)
+    const res = await fetch(`${API_BASE}/api/therapists?ot_id=${t.ot_id}`, { method: 'DELETE' }).catch(() => null)
     if (res?.ok) { showToast('ลบนักกายภาพสำเร็จ'); load() }
     else alert('ลบไม่สำเร็จ')
   }
@@ -64,7 +66,7 @@ export default function TherapistsPage() {
     const newPassword = prompt(`ตั้งรหัสผ่านใหม่สำหรับ กภ. ${t.first_name} ${t.last_name}`)
     if (!newPassword) return
     if (newPassword.length < 4) { alert('รหัสผ่านต้องมีอย่างน้อย 4 ตัวอักษร'); return }
-    const res = await fetch('http://localhost:3000/api/therapists', {
+    const res = await fetch(`${API_BASE}/api/therapists`, {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ otId: t.ot_id, usersId: t.users_id, newPassword }),
     }).catch(() => null)
@@ -84,7 +86,9 @@ export default function TherapistsPage() {
       {toast && <div className="toast toast-success">{toast}</div>}
       <div className="h-sec">
         <div><h1 className="page-title">จัดการนักกิจกรรมบำบัด</h1><p className="page-sub">เพิ่ม แก้ไข และดูภาระงานของนักกิจกรรมบำบัดทั้งหมดในศูนย์</p></div>
-        <button className="btn btn-sm" onClick={() => (showForm ? closeForm() : openAddForm())}>{showForm ? '✕ ปิดฟอร์ม' : '+ เพิ่มนักกายภาพ'}</button>
+        <button className="btn btn-sm" onClick={() => (showForm ? closeForm() : openAddForm())}>
+          {showForm ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><XIcon size={13} /> ปิดฟอร์ม</span> : '+ เพิ่มนักกายภาพ'}
+        </button>
       </div>
 
       {showForm && (

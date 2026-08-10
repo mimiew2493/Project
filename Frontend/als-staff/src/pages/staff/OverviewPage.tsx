@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { Patient, Therapist, PatientAppointment, Device } from '../../types'
+import { API_BASE } from '../../config'
 
 const MONTH_LABELS = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.']
 
@@ -14,10 +15,10 @@ export default function OverviewPage() {
 
   useEffect(() => {
     Promise.all([
-      fetch('http://localhost:3000/api/patients?status=ALL').then(r => r.json()),
-      fetch('http://localhost:3000/api/therapists').then(r => r.json()),
-      fetch('http://localhost:3000/api/appointments').then(r => r.json()),
-      fetch('http://localhost:3000/api/devices').then(r => r.json()),
+      fetch(`${API_BASE}/api/patients?status=ALL`).then(r => r.json()),
+      fetch(`${API_BASE}/api/therapists`).then(r => r.json()),
+      fetch(`${API_BASE}/api/appointments`).then(r => r.json()),
+      fetch(`${API_BASE}/api/devices`).then(r => r.json()),
     ])
       .then(([p, t, a, d]) => {
         if (Array.isArray(p)) setPatients(p)

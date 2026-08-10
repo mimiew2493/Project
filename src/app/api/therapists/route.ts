@@ -7,7 +7,7 @@ import { eq, countDistinct } from 'drizzle-orm'
 import { DEFAULT_PASSWORD, hashPassword } from '@/src/utils/password'
 
 const cors = {
-  'Access-Control-Allow-Origin': 'http://localhost:5173',
+  'Access-Control-Allow-Origin': process.env.ALLOWED_ORIGIN || 'http://localhost:5173',
   'Access-Control-Allow-Methods': 'GET, POST, PATCH, DELETE',
   'Access-Control-Allow-Headers': 'Content-Type',
 }
@@ -36,6 +36,9 @@ export async function GET() {
 
     return NextResponse.json(result, { headers: cors })
   } catch (error: any) {
+    if (error.code === '23505') {
+      return NextResponse.json({ error: 'ข้อมูลนี้ซ้ำกับที่มีอยู่ในระบบแล้ว (เช่น เบอร์โทรหรืออีเมล)' }, { status: 409, headers: cors })
+    }
     return NextResponse.json({ error: error.message }, { status: 500, headers: cors })
   }
 }
@@ -47,6 +50,13 @@ export async function POST(req: Request) {
     const timestamp = Date.now().toString().slice(-6)
     const usersId = `U${timestamp}`
     const otId = `OT${timestamp}`
+
+    if (body.phone) {
+      const [existing] = await db.select({ users_id: users.users_id }).from(users).where(eq(users.username, body.phone))
+      if (existing) {
+        return NextResponse.json({ error: 'เบอร์โทรนี้มีผู้ใช้งานในระบบแล้ว กรุณาใช้เบอร์อื่น' }, { status: 409, headers: cors })
+      }
+    }
 
     // สร้าง user (role R002 = นักกิจกรรมบำบัด)
     await db.insert(users).values({
@@ -77,6 +87,9 @@ export async function POST(req: Request) {
     }, { status: 201, headers: cors })
 
   } catch (error: any) {
+    if (error.code === '23505') {
+      return NextResponse.json({ error: 'ข้อมูลนี้ซ้ำกับที่มีอยู่ในระบบแล้ว (เช่น เบอร์โทรหรืออีเมล)' }, { status: 409, headers: cors })
+    }
     return NextResponse.json({ error: error.message }, { status: 500, headers: cors })
   }
 }
@@ -109,6 +122,9 @@ export async function PATCH(req: Request) {
 
     return NextResponse.json({ message: 'แก้ไขข้อมูลนักกายภาพสำเร็จ' }, { headers: cors })
   } catch (error: any) {
+    if (error.code === '23505') {
+      return NextResponse.json({ error: 'ข้อมูลนี้ซ้ำกับที่มีอยู่ในระบบแล้ว (เช่น เบอร์โทรหรืออีเมล)' }, { status: 409, headers: cors })
+    }
     return NextResponse.json({ error: error.message }, { status: 500, headers: cors })
   }
 }
@@ -133,6 +149,9 @@ export async function DELETE(req: Request) {
 
     return NextResponse.json({ message: 'ลบนักกายภาพสำเร็จ' }, { headers: cors })
   } catch (error: any) {
+    if (error.code === '23505') {
+      return NextResponse.json({ error: 'ข้อมูลนี้ซ้ำกับที่มีอยู่ในระบบแล้ว (เช่น เบอร์โทรหรืออีเมล)' }, { status: 409, headers: cors })
+    }
     return NextResponse.json({ error: error.message }, { status: 500, headers: cors })
   }
 }

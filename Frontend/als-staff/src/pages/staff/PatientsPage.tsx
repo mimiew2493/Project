@@ -1,9 +1,14 @@
 import { useEffect, useState } from 'react'
-import type { Patient } from '../../types'
+import type { Patient, TherapySession, PatientAppointment } from '../../types'
 import type { ResumeTarget } from '../../App'
 import SearchBar from '../../components/SearchBar'
 import Stepper from '../../components/Stepper'
 import SideBadge from '../../components/SideBadge'
+import SessionHistoryList from '../../components/SessionHistoryList'
+import { XCircleIcon, ClipboardIcon, ClipboardListIcon, CheckIcon } from '../../components/Icon'
+import { API_BASE } from '../../config'
+
+const fmtAppt = (iso: string) => new Date(iso).toLocaleString('th-TH', { dateStyle: 'medium', timeStyle: 'short' })
 
 const FILTER_OPTIONS = [
   { key: 'all', label: 'ทั้งหมด' },
@@ -36,14 +41,37 @@ export default function PatientsPage({ onRegister }: Props) {
   const [editForm, setEditForm] = useState<EditForm>(emptyEdit)
   const [saving, setSaving] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
+  const [expandedHistoryId, setExpandedHistoryId] = useState<string | null>(null)
+  const [historyLoadingId, setHistoryLoadingId] = useState<string | null>(null)
+  const [historyCache, setHistoryCache] = useState<Record<string, TherapySession[]>>({})
+  const [pendingAppts, setPendingAppts] = useState<PatientAppointment[]>([])
+  const [confirmingId, setConfirmingId] = useState<string | null>(null)
 
   const load = () => {
-    fetch('http://localhost:3000/api/patients?status=ALL')
+    fetch(`${API_BASE}/api/patients?status=ALL`)
       .then(r => r.json())
       .then(d => { if (Array.isArray(d)) setPatients(d); else setError('โหลดข้อมูลไม่ได้'); setLoading(false) })
       .catch(() => { setError('ไม่สามารถเชื่อมต่อ Backend ได้'); setLoading(false) })
   }
+  const loadPendingAppts = () => {
+    fetch(`${API_BASE}/api/appointments`)
+      .then(r => r.json())
+      .then(d => { if (Array.isArray(d)) setPendingAppts(d.filter((a: PatientAppointment) => a.status === 'PROPOSED')) })
+      .catch(() => {})
+  }
   useEffect(load, [])
+  useEffect(loadPendingAppts, [])
+
+  const respondToAppt = async (appointmentId: string, status: 'SCHEDULED' | 'CANCELLED') => {
+    setConfirmingId(appointmentId)
+    const res = await fetch(`${API_BASE}/api/appointments`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ appointmentId, status }),
+    }).catch(() => null)
+    if (res?.ok) { showToast(status === 'SCHEDULED' ? 'ยืนยันนัดและแจ้งผู้ป่วยแล้ว' : 'ยกเลิกนัดที่เสนอมาแล้ว'); loadPendingAppts() }
+    else alert('ดำเนินการไม่สำเร็จ')
+    setConfirmingId(null)
+  }
 
   const filtered = patients
     .filter(p => filterSide === 'all' || p.affected_side === filterSide)
@@ -68,7 +96,7 @@ export default function PatientsPage({ onRegister }: Props) {
     if (!p) return
     if (!editForm.firstName || !editForm.lastName) { alert('กรุณากรอกชื่อและนามสกุล'); return }
     setSaving(true)
-    const res = await fetch('http://localhost:3000/api/register', {
+    const res = await fetch(`${API_BASE}/api/register`, {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         patientId: p.patient_id, usersId: p.users_id,
@@ -81,9 +109,21 @@ export default function PatientsPage({ onRegister }: Props) {
     setSaving(false)
   }
 
+  const toggleHistory = (patientId: string) => {
+    if (expandedHistoryId === patientId) { setExpandedHistoryId(null); return }
+    setExpandedHistoryId(patientId)
+    if (historyCache[patientId]) return
+    setHistoryLoadingId(patientId)
+    fetch(`${API_BASE}/api/sessions?patient_id=${patientId}`)
+      .then(r => r.json())
+      .then(d => { if (Array.isArray(d)) setHistoryCache(prev => ({ ...prev, [patientId]: d })) })
+      .catch(() => {})
+      .finally(() => setHistoryLoadingId(null))
+  }
+
   const removePatient = async (p: Patient) => {
     if (!confirm(`ยืนยันลบผู้ป่วย ${patientName(p)} (${p.patient_id})? การลบไม่สามารถย้อนกลับได้`)) return
-    const res = await fetch(`http://localhost:3000/api/patients?patient_id=${p.patient_id}`, { method: 'DELETE' }).catch(() => null)
+    const res = await fetch(`${API_BASE}/api/patients?patient_id=${p.patient_id}`, { method: 'DELETE' }).catch(() => null)
     if (res?.ok) { showToast('ลบผู้ป่วยสำเร็จ'); load() }
     else alert('ลบไม่สำเร็จ')
   }
@@ -91,7 +131,7 @@ export default function PatientsPage({ onRegister }: Props) {
   if (loading) return <div className="loading-box">กำลังโหลด...</div>
   if (error) return (
     <div className="empty-box">
-      <div className="empty-icon">❌</div>
+      <div className="empty-icon"><XCircleIcon size={48} /></div>
       <div className="empty-title">{error}</div>
       <button className="btn" style={{ marginTop: 12 }} onClick={() => window.location.reload()}>ลองใหม่</button>
     </div>
@@ -107,6 +147,33 @@ export default function PatientsPage({ onRegister }: Props) {
         </div>
         <button className="btn btn-sm" onClick={() => onRegister()}>+ รับผู้ป่วยใหม่</button>
       </div>
+
+      {pendingAppts.length > 0 && (
+        <div className="card" style={{ borderColor: 'var(--blue)' }}>
+          <div className="h-sec"><span className="h-sec-title">นัดที่นักกายภาพเสนอมา รอยืนยัน ({pendingAppts.length})</span></div>
+          <div className="stack">
+            {pendingAppts.map(a => (
+              <div key={a.appointment_id} className="kv" style={{ display: 'block' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+                  <div>
+                    <b style={{ fontSize: 12.5 }}>{a.patient_name} {a.patient_lastname} · {a.patient_id}</b>
+                    <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
+                      {fmtAppt(a.appointment_date)} · {a.duration_min} นาที · เสนอโดย กภ. {a.therapist_name} {a.therapist_lastname}
+                      {a.note ? ` · ${a.note}` : ''}
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <button className="btn btn-sm" disabled={confirmingId === a.appointment_id}
+                      onClick={() => respondToAppt(a.appointment_id, 'SCHEDULED')}>ยืนยันนัด</button>
+                    <button className="btn btn-ghost btn-sm" disabled={confirmingId === a.appointment_id}
+                      onClick={() => respondToAppt(a.appointment_id, 'CANCELLED')}>ยกเลิก</button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {editingId && (
         <div className="card" style={{ borderColor: 'var(--blue)' }}>
@@ -141,7 +208,7 @@ export default function PatientsPage({ onRegister }: Props) {
 
       {filtered.length === 0 ? (
         <div className="empty-box">
-          <div className="empty-icon">📋</div>
+          <div className="empty-icon"><ClipboardIcon size={48} /></div>
           <div className="empty-title">ไม่พบผู้ป่วยที่ตรงกับเงื่อนไข</div>
           <div className="empty-sub">ลองเปลี่ยนคำค้นหาหรือ filter</div>
           <button className="btn btn-ghost btn-sm" style={{ marginTop: 12 }}
@@ -168,7 +235,7 @@ export default function PatientsPage({ onRegister }: Props) {
                   </div>
                   <div className="patient-actions">
                     {completed
-                      ? <span className="pill pill-green">✓ เสร็จสิ้น</span>
+                      ? <span className="pill pill-green" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><CheckIcon size={11} /> เสร็จสิ้น</span>
                       : (
                         <>
                           <span className="pill pill-amber">ขั้นที่ {p.registration_step ?? 1} / 3</span>
@@ -178,11 +245,20 @@ export default function PatientsPage({ onRegister }: Props) {
                           </button>
                         </>
                       )}
+                    <button className="btn btn-ghost btn-sm" onClick={() => toggleHistory(p.patient_id)}>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><ClipboardListIcon size={12} /> ประวัติการฝึก</span>
+                    </button>
                     <button className="btn btn-ghost btn-sm" onClick={() => startEdit(p)}>แก้ไข</button>
                     <button className="btn btn-ghost btn-sm" onClick={() => removePatient(p)}>ลบ</button>
                   </div>
                 </div>
                 {!completed && <Stepper current={p.registration_step ?? 1} />}
+                {expandedHistoryId === p.patient_id && (
+                  <div className="card" style={{ marginTop: 12, background: 'var(--canvas)' }}>
+                    <div className="h-sec"><span className="h-sec-title">ประวัติการฝึกจากอุปกรณ์ IoT</span></div>
+                    <SessionHistoryList sessions={historyCache[p.patient_id] ?? []} loading={historyLoadingId === p.patient_id} />
+                  </div>
+                )}
               </div>
             )
           })}

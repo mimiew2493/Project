@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import type { Device } from '../../types'
 import SearchBar from '../../components/SearchBar'
+import { XIcon } from '../../components/Icon'
+import { API_BASE } from '../../config'
 
 const STATUS_LABEL: Record<string, string> = { ACTIVE: 'ใช้งานได้', MAINTENANCE: 'ส่งซ่อม' }
 const STATUS_PILL: Record<string, string> = { ACTIVE: 'pill-green', MAINTENANCE: 'pill-amber' }
@@ -33,7 +35,7 @@ export default function DevicesPage() {
   const [toast, setToast] = useState<string | null>(null)
 
   const load = () => {
-    fetch('http://localhost:3000/api/devices')
+    fetch(`${API_BASE}/api/devices`)
       .then(r => r.json()).then(d => { if (Array.isArray(d)) setDevices(d); setLoading(false) }).catch(() => setLoading(false))
   }
   useEffect(load, [])
@@ -55,11 +57,11 @@ export default function DevicesPage() {
     if (!form.deviceName || !form.serialNumber) { alert('กรุณากรอกชื่ออุปกรณ์และหมายเลขซีเรียล'); return }
     setSaving(true)
     const res = editing
-      ? await fetch('http://localhost:3000/api/devices', {
+      ? await fetch(`${API_BASE}/api/devices`, {
           method: 'PATCH', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ deviceId: editing.device_id, ...form }),
         }).catch(() => null)
-      : await fetch('http://localhost:3000/api/devices', {
+      : await fetch(`${API_BASE}/api/devices`, {
           method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form)
         }).catch(() => null)
     if (res?.ok) { showToast(editing ? 'แก้ไขอุปกรณ์สำเร็จ!' : 'เพิ่มอุปกรณ์สำเร็จ!'); closeForm(); load() }
@@ -69,7 +71,7 @@ export default function DevicesPage() {
 
   const removeDevice = async (d: Device) => {
     if (!confirm(`ยืนยันลบอุปกรณ์ ${d.device_id} (${d.device_name})? การลบไม่สามารถย้อนกลับได้`)) return
-    const res = await fetch(`http://localhost:3000/api/devices?device_id=${d.device_id}`, { method: 'DELETE' }).catch(() => null)
+    const res = await fetch(`${API_BASE}/api/devices?device_id=${d.device_id}`, { method: 'DELETE' }).catch(() => null)
     if (res?.ok) { showToast('ลบอุปกรณ์สำเร็จ'); load() }
     else alert('ลบไม่สำเร็จ — อาจมีข้อมูลการใช้งานของอุปกรณ์นี้อยู่ในระบบ')
   }
@@ -94,7 +96,9 @@ export default function DevicesPage() {
       {toast && <div className="toast toast-success">{toast}</div>}
       <div className="h-sec">
         <div><h1 className="page-title">คลังอุปกรณ์ IoT</h1><p className="page-sub">อุปกรณ์เป็นทรัพย์สินของศูนย์ที่ต้องยืม–คืน–ซ่อม ต้องรู้ว่าเครื่องไหนอยู่กับใคร</p></div>
-        <button className="btn btn-sm" onClick={() => (showForm ? closeForm() : openAddForm())}>{showForm ? '✕ ปิดฟอร์ม' : '+ เพิ่มอุปกรณ์'}</button>
+        <button className="btn btn-sm" onClick={() => (showForm ? closeForm() : openAddForm())}>
+          {showForm ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><XIcon size={13} /> ปิดฟอร์ม</span> : '+ เพิ่มอุปกรณ์'}
+        </button>
       </div>
 
       {showForm && (
