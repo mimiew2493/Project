@@ -1,6 +1,6 @@
 import { CheckIcon } from './Icon'
 
-const LABELS = ['รับเรื่อง + ลงทะเบียน', 'นัดหมาย', 'จับคู่อุปกรณ์']
+const LABELS = ['รับเรื่อง + ลงทะเบียน', 'โปรแกรมฝึก + จับคู่อุปกรณ์', 'นัดตรวจเช็คอุปกรณ์']
 
 export default function Stepper({ current }: { current: number }) {
   return (

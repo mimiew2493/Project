@@ -4,7 +4,9 @@ import { patients } from '@/src/db/schema/patients'
 import { appointments } from '@/src/db/schema/appointments'
 import { generateId } from '@/src/utils/generate-id'
 import { ID_PREFIX, SEQUENCE } from '@/src/constants/id-config'
+import { TARGET_STAGE } from '@/src/constants/program'
 import { DEFAULT_PASSWORD, hashPassword } from '@/src/utils/password'
+import { pgErrorCode } from '@/src/utils/db-error'
 import { eq } from 'drizzle-orm'
 import { NextResponse } from 'next/server'
 
@@ -13,6 +15,8 @@ const cors = {
   'Access-Control-Allow-Methods': 'GET, POST, PATCH, DELETE',
   'Access-Control-Allow-Headers': 'Content-Type',
 }
+
+const VALID_STAGES = new Set(Object.values(TARGET_STAGE) as string[])
 
 export async function OPTIONS() {
   return new NextResponse(null, { status: 200, headers: cors })
@@ -39,7 +43,7 @@ export async function GET(req: Request) {
 
     return NextResponse.json({ ...user, ...patient, appointment: appointment ?? null }, { headers: cors })
   } catch (error: any) {
-    if (error.code === '23505') {
+    if (pgErrorCode(error) === '23505') {
       return NextResponse.json({ error: 'ข้อมูลนี้ซ้ำกับที่มีอยู่ในระบบแล้ว (เช่น เบอร์โทรหรืออีเมล)' }, { status: 409, headers: cors })
     }
     return NextResponse.json({ error: error.message }, { status: 500, headers: cors })
@@ -94,20 +98,23 @@ export async function POST(req: Request) {
       { status: 201, headers: cors }
     )
   } catch (error: any) {
-    if (error.code === '23505') {
+    if (pgErrorCode(error) === '23505') {
       return NextResponse.json({ error: 'ข้อมูลนี้ซ้ำกับที่มีอยู่ในระบบแล้ว (เช่น เบอร์โทรหรืออีเมล)' }, { status: 409, headers: cors })
     }
     return NextResponse.json({ error: error.message }, { status: 500, headers: cors })
   }
 }
 
-// PATCH /api/register → ขั้นที่ 1-3: บันทึกข้อมูลเพิ่มเติม / นัดหมาย / ปิดการลงทะเบียน
+// PATCH /api/register → ขั้นที่ 1-3: บันทึกข้อมูลเพิ่มเติม / นัดตรวจเช็คอุปกรณ์ / ปิดการลงทะเบียน
 export async function PATCH(req: Request) {
   try {
     const body = await req.json()
 
     if (!body.patientId || !body.usersId) {
       return NextResponse.json({ error: 'ต้องระบุ patientId และ usersId' }, { status: 400, headers: cors })
+    }
+    if (body.currentStage !== undefined && body.currentStage && !VALID_STAGES.has(body.currentStage)) {
+      return NextResponse.json({ error: 'ระยะอาการไม่ถูกต้อง' }, { status: 400, headers: cors })
     }
 
     const result = await db.transaction(async (tx) => {
@@ -127,8 +134,11 @@ export async function PATCH(req: Request) {
       if (body.medicalCondition !== undefined) patientPatch.medical_condition = body.medicalCondition || null
       if (body.weight !== undefined) patientPatch.weight = body.weight || null
       if (body.address !== undefined) patientPatch.address = body.address || null
+      if (body.caretakerName !== undefined) patientPatch.caretaker_name = body.caretakerName || null
+      if (body.caretakerPhone !== undefined) patientPatch.caretaker_phone = body.caretakerPhone || null
       if (body.affectedSide !== undefined) patientPatch.affected_side = body.affectedSide || null
       if (body.affectedAreas !== undefined) patientPatch.affected_areas = body.affectedAreas || null
+      if (body.currentStage !== undefined) patientPatch.current_stage = body.currentStage || null
       if (body.step) {
         patientPatch.registration_step = Number(body.step)
         patientPatch.status = Number(body.step) >= 3 ? 'COMPLETED' : 'IN_PROGRESS'
@@ -139,7 +149,7 @@ export async function PATCH(req: Request) {
 
       let appointmentId: string | null = body.appointmentId || null
       if (appointmentId) {
-        // นัดมีอยู่แล้ว — แก้ไขเฉพาะฟิลด์ที่ส่งมา (เช่น มอบหมายอุปกรณ์ทีหลังโดยไม่ต้องส่งวันที่นัดซ้ำ)
+        // นัดมีอยู่แล้ว — แก้ไขเฉพาะฟิลด์ที่ส่งมา
         const apptPatch: Record<string, unknown> = {}
         if (body.otId !== undefined) apptPatch.ot_id = body.otId || null
         if (body.deviceId !== undefined) apptPatch.device_id = body.deviceId || null
@@ -176,7 +186,7 @@ export async function PATCH(req: Request) {
       { headers: cors }
     )
   } catch (error: any) {
-    if (error.code === '23505') {
+    if (pgErrorCode(error) === '23505') {
       return NextResponse.json({ error: 'ข้อมูลนี้ซ้ำกับที่มีอยู่ในระบบแล้ว (เช่น เบอร์โทรหรืออีเมล)' }, { status: 409, headers: cors })
     }
     return NextResponse.json({ error: error.message }, { status: 500, headers: cors })

@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
-import type { Patient, PatientAppointment, Device, TherapySession, Program, PatientProgram, SessionFeedback } from '../../types'
+import type { Patient, PatientAppointment, Device, TherapySession, Program, PatientProgram, SessionFeedback, DiseaseStage } from '../../types'
 import SearchBar from '../../components/SearchBar'
 import SideBadge from '../../components/SideBadge'
 import SessionHistoryList from '../../components/SessionHistoryList'
 import { ToolIcon, UserMdIcon, CalendarIcon, TrendingUpIcon } from '../../components/Icon'
+import { STAGE_LABEL, STAGE_PILL } from '../shared/ProgramLibraryPage'
 import { API_BASE } from '../../config'
 
 interface Props { otId: string; usersId: string }
@@ -12,9 +13,15 @@ const patientName = (p: Patient) => `${p.first_name ?? ''} ${p.last_name ?? ''}`
 
 const fmt = (iso: string) => new Date(iso).toLocaleString('th-TH', { dateStyle: 'medium', timeStyle: 'short' })
 
+const programOptionLabel = (p: Program) => p.target_stage ? `[${STAGE_LABEL[p.target_stage]}] ${p.program_name}` : p.program_name
+
 const emptyLogForm = { sessionDate: '', durationMin: '20', totalReps: '' }
-const emptyNewProgram = { programName: '', description: '', repeatCount: '3', sessionPerDay: '1', durationMin: '20' }
-const emptyNextAppt = { date: '', time: '', durationMin: '60', note: '' }
+const emptyNewProgram = { programName: '', description: '', targetStage: '' as DiseaseStage | '', repeatCount: '3', sessionPerDay: '1', durationMin: '20' }
+const emptyNextAppt = { date: '', time: '', durationMin: '60', deviceId: '', frequency: '', note: '' }
+
+const FREQUENCY_LABEL: Record<string, string> = {
+  ONCE: 'นัดครั้งเดียว', WEEKLY: 'นัดทุกสัปดาห์', BIWEEKLY: 'นัดทุก 2 สัปดาห์', MONTHLY: 'นัดทุกเดือน',
+}
 
 const APPT_STATUS_LABEL: Record<string, string> = {
   SCHEDULED: 'ยืนยันนัดแล้ว', PROPOSED: 'เสนอแล้ว รอเวชระเบียนยืนยัน',
@@ -51,12 +58,16 @@ export default function MyCasesPage({ otId, usersId }: Props) {
   const [nextAppt, setNextAppt] = useState(emptyNextAppt)
   const [proposingAppt, setProposingAppt] = useState(false)
 
+  const [editingInfo, setEditingInfo] = useState(false)
+  const [infoForm, setInfoForm] = useState({ currentStage: '' as DiseaseStage | '', medicalCondition: '' })
+  const [savingInfo, setSavingInfo] = useState(false)
+
   useEffect(() => {
     Promise.all([
       fetch(`${API_BASE}/api/patients?status=ALL`).then(r => r.json()),
       fetch(`${API_BASE}/api/appointments`).then(r => r.json()),
       fetch(`${API_BASE}/api/devices`).then(r => r.json()),
-      fetch(`${API_BASE}/api/programs?created_by=${usersId}`).then(r => r.json()),
+      fetch(`${API_BASE}/api/programs`).then(r => r.json()),
     ])
       .then(([p, a, d, pr]) => {
         if (Array.isArray(p)) setPatients(p); if (Array.isArray(a)) setAppointments(a)
@@ -70,6 +81,13 @@ export default function MyCasesPage({ otId, usersId }: Props) {
     fetch(`${API_BASE}/api/appointments`)
       .then(r => r.json())
       .then(d => { if (Array.isArray(d)) setAppointments(d) })
+      .catch(() => {})
+  }
+
+  const reloadPatients = () => {
+    fetch(`${API_BASE}/api/patients?status=ALL`)
+      .then(r => r.json())
+      .then(d => { if (Array.isArray(d)) setPatients(d) })
       .catch(() => {})
   }
 
@@ -101,6 +119,7 @@ export default function MyCasesPage({ otId, usersId }: Props) {
     loadSessions(selectedPatientId)
     loadProgram(selectedPatientId)
     loadFeedback(selectedPatientId)
+    setEditingInfo(false)
   }, [selectedPatientId])
 
   const saveSession = async () => {
@@ -116,12 +135,13 @@ export default function MyCasesPage({ otId, usersId }: Props) {
       }),
     }).catch(() => null)
     if (res?.ok) { setShowLogForm(false); setLogForm(emptyLogForm); loadSessions(selectedPatientId); loadProgram(selectedPatientId) }
-    else alert('บันทึกไม่สำเร็จ')
+    else { const data = await res?.json().catch(() => null); alert(data?.error ?? 'บันทึกไม่สำเร็จ') }
     setSaving(false)
   }
 
   const createProgram = async () => {
     if (!newProgram.programName) { alert('กรุณาระบุชื่อโปรแกรม'); return }
+    if (!newProgram.targetStage) { alert('กรุณาเลือกระยะอาการของโปรแกรม'); return }
     setAssigning(true)
     const res = await fetch(`${API_BASE}/api/programs`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -129,7 +149,7 @@ export default function MyCasesPage({ otId, usersId }: Props) {
     }).catch(() => null)
     if (res?.ok) {
       const data = await res.json()
-      const created = await fetch(`${API_BASE}/api/programs?created_by=${usersId}`).then(r => r.json())
+      const created = await fetch(`${API_BASE}/api/programs`).then(r => r.json())
       if (Array.isArray(created)) setMyPrograms(created)
       setAssignProgramId(data.program_id)
       setShowNewProgramForm(false)
@@ -150,16 +170,38 @@ export default function MyCasesPage({ otId, usersId }: Props) {
     setAssigning(false)
   }
 
+  const openEditInfo = (p: Patient) => {
+    setInfoForm({ currentStage: (p.current_stage ?? '') as DiseaseStage | '', medicalCondition: p.medical_condition ?? '' })
+    setEditingInfo(true)
+  }
+
+  const saveInfo = async (p: Patient) => {
+    setSavingInfo(true)
+    const res = await fetch(`${API_BASE}/api/register`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        patientId: p.patient_id, usersId: p.users_id,
+        currentStage: infoForm.currentStage || null, medicalCondition: infoForm.medicalCondition,
+      }),
+    }).catch(() => null)
+    if (res?.ok) { setEditingInfo(false); reloadPatients() }
+    else alert('บันทึกไม่สำเร็จ')
+    setSavingInfo(false)
+  }
+
   const proposeNextAppointment = async (bookDirectly: boolean) => {
     if (!selectedPatientId) return
     if (!nextAppt.date || !nextAppt.time) { alert('กรุณาเลือกวันที่และเวลานัด'); return }
+    if (!nextAppt.deviceId) { alert('กรุณาเลือกอุปกรณ์ที่จะตรวจเช็ค — นัดหมายในระบบนี้คือนัดตรวจเช็คอุปกรณ์ ไม่ใช่นัดตรวจอาการ'); return }
     setProposingAppt(true)
+    const noteParts = [nextAppt.frequency ? FREQUENCY_LABEL[nextAppt.frequency] : '', nextAppt.note].filter(Boolean)
     const res = await fetch(`${API_BASE}/api/appointments`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         patientId: selectedPatientId, otId,
         appointmentDate: `${nextAppt.date}T${nextAppt.time}:00`,
-        durationMin: nextAppt.durationMin, note: nextAppt.note || null,
+        durationMin: nextAppt.durationMin, deviceId: nextAppt.deviceId || null,
+        note: noteParts.length ? noteParts.join(' · ') : null,
         status: bookDirectly ? 'SCHEDULED' : 'PROPOSED',
       }),
     }).catch(() => null)
@@ -215,18 +257,55 @@ export default function MyCasesPage({ otId, usersId }: Props) {
         <div className="reg-grid">
           <div className="stack">
             <div className="card">
-              <div className="h-sec"><span className="h-sec-title">ข้อมูลผู้ป่วย</span></div>
+              <div className="h-sec">
+                <span className="h-sec-title">ข้อมูลผู้ป่วย</span>
+                {!editingInfo && <button className="btn btn-ghost btn-sm" onClick={() => openEditInfo(patient)}>แก้ไข</button>}
+              </div>
               <div className="kv"><span>ที่อยู่</span><b>{patient.address ?? '—'}</b></div>
               <div className="kv"><span>เบอร์ติดต่อ</span><b className="mono">{patient.phone ?? '—'}</b></div>
               <div className="kv"><span>วันที่ลงทะเบียน</span><b>{patient.register_date ?? '—'}</b></div>
               <div className="kv"><span>สถานะ</span><b>{patient.status === 'COMPLETED' ? 'ลงทะเบียนครบแล้ว' : 'อยู่ระหว่างลงทะเบียน'}</b></div>
+
+              {editingInfo ? (
+                <div className="stack" style={{ marginTop: 10 }}>
+                  <div className="field">
+                    <label className="field-label">ระยะอาการปัจจุบัน</label>
+                    <select className="inp" value={infoForm.currentStage}
+                            onChange={e => setInfoForm(p => ({ ...p, currentStage: e.target.value as DiseaseStage | '' }))}>
+                      <option value="">ยังไม่ประเมิน</option>
+                      <option value="FLACCID">{STAGE_LABEL.FLACCID}</option>
+                      <option value="SPASTIC">{STAGE_LABEL.SPASTIC}</option>
+                      <option value="RECOVERY">{STAGE_LABEL.RECOVERY}</option>
+                    </select>
+                  </div>
+                  <div className="field">
+                    <label className="field-label">อาการ/หมายเหตุ</label>
+                    <textarea className="inp" rows={2} value={infoForm.medicalCondition}
+                              onChange={e => setInfoForm(p => ({ ...p, medicalCondition: e.target.value }))} />
+                  </div>
+                  <div className="form-actions" style={{ justifyContent: 'flex-start', gap: 8 }}>
+                    <button className="btn btn-ghost btn-sm" onClick={() => setEditingInfo(false)} disabled={savingInfo}>ยกเลิก</button>
+                    <button className="btn btn-sm" onClick={() => saveInfo(patient)} disabled={savingInfo}>{savingInfo ? 'กำลังบันทึก...' : 'บันทึก'}</button>
+                  </div>
+                </div>
+              ) : (
+                <div className="kv"><span>ระยะอาการปัจจุบัน</span>
+                  {patient.current_stage
+                    ? <span className={`pill ${STAGE_PILL[patient.current_stage]}`}>{STAGE_LABEL[patient.current_stage]}</span>
+                    : <b style={{ color: 'var(--muted)' }}>ยังไม่ประเมิน</b>}
+                </div>
+              )}
             </div>
 
             <div className="card">
               <div className="h-sec">
                 <span className="h-sec-title" style={{ display: 'flex', alignItems: 'center', gap: 6 }}><TrendingUpIcon size={15} /> พัฒนาการของผู้ป่วย</span>
-                <button className="btn btn-sm" onClick={() => setShowLogForm(v => !v)}>{showLogForm ? 'ยกเลิก' : '+ บันทึกผลการฝึก'}</button>
+                <button className="btn btn-sm" onClick={() => setShowLogForm(v => !v)} disabled={!currentProgram}>{showLogForm ? 'ยกเลิก' : '+ บันทึกผลการฝึก'}</button>
               </div>
+
+              {!currentProgram && (
+                <div className="note" style={{ marginBottom: 12 }}>ต้องกำหนดโปรแกรมการฝึกให้ผู้ป่วยคนนี้ก่อน (ดูการ์ด "โปรแกรมการฝึก" ด้านล่าง) จึงจะบันทึกผลการฝึกได้</div>
+              )}
 
               {showLogForm && (
                 <div className="grid3" style={{ marginBottom: 12, alignItems: 'end' }}>
@@ -304,6 +383,9 @@ export default function MyCasesPage({ otId, usersId }: Props) {
               {currentProgram ? (
                 <>
                   <div className="kv"><span>โปรแกรมปัจจุบัน</span><b>{currentProgram.program_name}</b></div>
+                  {currentProgram.target_stage && (
+                    <div className="kv"><span>ระยะอาการ</span><span className={`pill ${STAGE_PILL[currentProgram.target_stage]}`}>{STAGE_LABEL[currentProgram.target_stage]}</span></div>
+                  )}
                   <div className="kv"><span>เป้าหมาย</span><b>{currentProgram.repeat_count} ครั้ง/เซต · {currentProgram.session_per_day} เซต/วัน</b></div>
                   <div className="kv"><span>ระยะเวลา/ครั้ง</span><b>{Math.round(currentProgram.duration_sec / 60)} นาที</b></div>
                   {currentProgram.description && <div className="note" style={{ marginTop: 8 }}>{currentProgram.description}</div>}
@@ -316,11 +398,12 @@ export default function MyCasesPage({ otId, usersId }: Props) {
                 <label className="field-label">เปลี่ยน/กำหนดโปรแกรม</label>
                 <select className="inp" value={assignProgramId} onChange={e => setAssignProgramId(e.target.value)}>
                   <option value="">เลือกโปรแกรม...</option>
-                  {myPrograms.map(p => <option key={p.program_id} value={p.program_id}>{p.program_name}</option>)}
+                  {myPrograms.map(p => <option key={p.program_id} value={p.program_id}>{programOptionLabel(p)}</option>)}
                 </select>
+                <div style={{ fontSize: 10.5, color: 'var(--muted)', marginTop: 4 }}>เลือกโปรแกรมให้ตรงกับระยะอาการของผู้ป่วย ดูโปรแกรมทั้งหมดได้ที่ "คลังโปรแกรมฝึก"</div>
               </div>
               <div className="form-actions" style={{ justifyContent: 'flex-start', gap: 8 }}>
-                <button className="btn btn-sm" onClick={assignProgram} disabled={assigning || !assignProgramId}>{assigning ? 'กำลังบันทึก...' : 'กำหนดโปรแกรมนี้'}</button>
+                <button className="btn btn-sm" onClick={assignProgram} disabled={assigning || !assignProgramId}>{assigning ? 'กำลังบันทึก...' : currentProgram ? 'เปลี่ยนเป็นโปรแกรมนี้' : 'กำหนดโปรแกรมนี้'}</button>
                 <button className="btn btn-ghost btn-sm" onClick={() => setShowNewProgramForm(v => !v)}>{showNewProgramForm ? 'ยกเลิก' : '+ สร้างโปรแกรมใหม่'}</button>
               </div>
 
@@ -331,6 +414,14 @@ export default function MyCasesPage({ otId, usersId }: Props) {
                   </div>
                   <div className="field"><label className="field-label">รายละเอียด</label>
                     <textarea className="inp" rows={2} value={newProgram.description} onChange={e => setNewProgram(p => ({ ...p, description: e.target.value }))} />
+                  </div>
+                  <div className="field"><label className="field-label">ระยะอาการที่เหมาะสม</label>
+                    <select className="inp" value={newProgram.targetStage} onChange={e => setNewProgram(p => ({ ...p, targetStage: e.target.value as DiseaseStage | '' }))}>
+                      <option value="">-- เลือกระยะ --</option>
+                      <option value="FLACCID">{STAGE_LABEL.FLACCID}</option>
+                      <option value="SPASTIC">{STAGE_LABEL.SPASTIC}</option>
+                      <option value="RECOVERY">{STAGE_LABEL.RECOVERY}</option>
+                    </select>
                   </div>
                   <div className="grid3">
                     <div className="field"><label className="field-label">ครั้ง/เซต</label>
@@ -363,9 +454,10 @@ export default function MyCasesPage({ otId, usersId }: Props) {
 
             <div className="card">
               <div className="h-sec">
-                <span className="h-sec-title">ประวัตินัดหมายกับคุณ ({appts.length})</span>
-                <button className="btn btn-sm" onClick={() => setShowNextApptForm(v => !v)}>{showNextApptForm ? 'ยกเลิก' : '+ เสนอนัดครั้งถัดไป'}</button>
+                <span className="h-sec-title">ประวัตินัดตรวจเช็คอุปกรณ์ ({appts.length})</span>
+                <button className="btn btn-sm" onClick={() => setShowNextApptForm(v => !v)}>{showNextApptForm ? 'ยกเลิก' : '+ เสนอนัดตรวจเช็คอุปกรณ์'}</button>
               </div>
+              <div className="note" style={{ marginBottom: 10 }}>นัดหมายในระบบนี้คือนัดตรวจเช็คอุปกรณ์ IoT ไม่ใช่นัดตรวจอาการผู้ป่วย จึงไม่จำเป็นต้องนัดถี่</div>
 
               {showNextApptForm && (
                 <div className="stack" style={{ marginBottom: 12 }}>
@@ -383,9 +475,27 @@ export default function MyCasesPage({ otId, usersId }: Props) {
                       <input className="inp" type="number" min="1" value={nextAppt.durationMin} onChange={e => setNextAppt(p => ({ ...p, durationMin: e.target.value }))} />
                     </div>
                   </div>
+                  <div className="grid2">
+                    <div className="field">
+                      <label className="field-label">อุปกรณ์ที่จะตรวจเช็ค <span className="req">*</span></label>
+                      <select className="inp" value={nextAppt.deviceId} onChange={e => setNextAppt(p => ({ ...p, deviceId: e.target.value }))}>
+                        <option value="">เลือกอุปกรณ์...</option>
+                        {devices.filter(d => d.status === 'ACTIVE' && (!d.holder_patient_id || d.holder_patient_id === selectedPatientId)).map(d => (
+                          <option key={d.device_id} value={d.device_id}>{d.device_id} — {d.device_name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="field">
+                      <label className="field-label">ความถี่การนัด</label>
+                      <select className="inp" value={nextAppt.frequency} onChange={e => setNextAppt(p => ({ ...p, frequency: e.target.value }))}>
+                        <option value="">ไม่ระบุ</option>
+                        {Object.entries(FREQUENCY_LABEL).map(([k, label]) => <option key={k} value={k}>{label}</option>)}
+                      </select>
+                    </div>
+                  </div>
                   <div className="field">
-                    <label className="field-label">หมายเหตุ (เช่น ความถี่ที่แนะนำ)</label>
-                    <input className="inp" value={nextAppt.note} onChange={e => setNextAppt(p => ({ ...p, note: e.target.value }))} placeholder="เช่น นัดทุก 2 สัปดาห์" />
+                    <label className="field-label">หมายเหตุเพิ่มเติม</label>
+                    <input className="inp" value={nextAppt.note} onChange={e => setNextAppt(p => ({ ...p, note: e.target.value }))} placeholder="เช่น ให้ญาติมาด้วย" />
                   </div>
                   <div className="form-actions" style={{ justifyContent: 'flex-start', gap: 8 }}>
                     <button className="btn btn-sm" onClick={() => proposeNextAppointment(false)} disabled={proposingAppt}>

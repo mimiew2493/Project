@@ -12,8 +12,29 @@ export default function SessionHistoryList({ sessions, loading, renderExtra }: P
     return <div className="note">ยังไม่มีข้อมูลการฝึกบันทึกไว้สำหรับผู้ป่วยคนนี้</div>
   }
 
+  const now = new Date()
+  const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+  const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
+  const totalReps = sessions.reduce((s, x) => s + x.total_reps, 0)
+  const weekReps = sessions.filter(s => new Date(s.session_date) >= weekAgo).reduce((s, x) => s + x.total_reps, 0)
+  const monthReps = sessions.filter(s => new Date(s.session_date) >= monthAgo).reduce((s, x) => s + x.total_reps, 0)
+
   return (
     <>
+      <div className="grid3" style={{ marginBottom: 12 }}>
+        <div className="card" style={{ padding: '10px 12px' }}>
+          <div className="eyebrow">รวมทั้งหมด</div>
+          <div className="big" style={{ fontSize: 20 }}>{totalReps}<span className="big-unit">ครั้ง</span></div>
+        </div>
+        <div className="card" style={{ padding: '10px 12px' }}>
+          <div className="eyebrow">7 วันล่าสุด</div>
+          <div className="big" style={{ fontSize: 20 }}>{weekReps}<span className="big-unit">ครั้ง</span></div>
+        </div>
+        <div className="card" style={{ padding: '10px 12px' }}>
+          <div className="eyebrow">30 วันล่าสุด</div>
+          <div className="big" style={{ fontSize: 20 }}>{monthReps}<span className="big-unit">ครั้ง</span></div>
+        </div>
+      </div>
       <MiniBarChart
         values={[...sessions].reverse().map(s => s.total_reps)}
         labels={[...sessions].reverse().map(s => new Date(s.session_date).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' }))}

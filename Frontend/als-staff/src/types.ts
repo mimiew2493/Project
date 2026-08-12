@@ -1,7 +1,11 @@
 export type PageKey =
   | 'queue' | 'register' | 'therapists' | 'devices' | 'schedule' | 'overview'
-  | 'my-cases' | 'my-schedule' | 'my-profile'
+  | 'my-home' | 'my-cases' | 'my-schedule' | 'my-profile'
+  | 'programs'
   | 'patient-home' | 'patient-appointments' | 'patient-stats' | 'patient-feedback' | 'patient-profile'
+
+/** ระยะอาการของโรคที่ใช้แบ่งประเภทโปรแกรมการฝึก */
+export type DiseaseStage = 'FLACCID' | 'SPASTIC' | 'RECOVERY'
 
 export interface AuthUser {
   users_id: string; username: string; first_name: string; last_name: string
@@ -23,6 +27,9 @@ export interface Patient {
   weight?: string | null; register_date?: string | null; address?: string | null
   affected_side?: string | null; affected_areas?: string | null
   first_name?: string | null; last_name?: string | null; phone?: string | null
+  email?: string | null; birth_date?: string | null; gender?: string | null
+  caretaker_name?: string | null; caretaker_phone?: string | null
+  current_stage?: DiseaseStage | null
   registration_step?: number; status?: string
 }
 
@@ -64,6 +71,7 @@ export interface TherapySession {
   status: string
   program_id: string
   program_name: string
+  patient_id?: string
   movement_count: string | null
 }
 
@@ -74,6 +82,7 @@ export interface Program {
   description?: string | null
   repeat_count: number
   program_type: string
+  target_stage?: DiseaseStage | null
   session_per_day: number
   duration_sec: number
   created_by?: string | null
@@ -88,6 +97,7 @@ export interface PatientProgram {
   program_name: string
   description?: string | null
   repeat_count: number
+  target_stage?: DiseaseStage | null
   session_per_day: number
   duration_sec: number
   assigned_date: string

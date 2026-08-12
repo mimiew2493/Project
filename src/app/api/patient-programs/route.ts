@@ -30,6 +30,7 @@ export async function GET(req: Request) {
         program_name: programs.program_name,
         description: programs.description,
         repeat_count: programs.repeat_count,
+        target_stage: programs.target_stage,
         session_per_day: programs.session_per_day,
         duration_sec: programs.duration_sec,
         assigned_date: patientPrograms.assigned_date,

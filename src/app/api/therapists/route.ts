@@ -5,6 +5,7 @@ import { appointments } from '@/src/db/schema/appointments'
 import { NextResponse } from 'next/server'
 import { eq, countDistinct } from 'drizzle-orm'
 import { DEFAULT_PASSWORD, hashPassword } from '@/src/utils/password'
+import { pgErrorCode } from '@/src/utils/db-error'
 
 const cors = {
   'Access-Control-Allow-Origin': process.env.ALLOWED_ORIGIN || 'http://localhost:5173',
@@ -36,7 +37,7 @@ export async function GET() {
 
     return NextResponse.json(result, { headers: cors })
   } catch (error: any) {
-    if (error.code === '23505') {
+    if (pgErrorCode(error) === '23505') {
       return NextResponse.json({ error: 'ข้อมูลนี้ซ้ำกับที่มีอยู่ในระบบแล้ว (เช่น เบอร์โทรหรืออีเมล)' }, { status: 409, headers: cors })
     }
     return NextResponse.json({ error: error.message }, { status: 500, headers: cors })
@@ -87,7 +88,7 @@ export async function POST(req: Request) {
     }, { status: 201, headers: cors })
 
   } catch (error: any) {
-    if (error.code === '23505') {
+    if (pgErrorCode(error) === '23505') {
       return NextResponse.json({ error: 'ข้อมูลนี้ซ้ำกับที่มีอยู่ในระบบแล้ว (เช่น เบอร์โทรหรืออีเมล)' }, { status: 409, headers: cors })
     }
     return NextResponse.json({ error: error.message }, { status: 500, headers: cors })
@@ -122,7 +123,7 @@ export async function PATCH(req: Request) {
 
     return NextResponse.json({ message: 'แก้ไขข้อมูลนักกายภาพสำเร็จ' }, { headers: cors })
   } catch (error: any) {
-    if (error.code === '23505') {
+    if (pgErrorCode(error) === '23505') {
       return NextResponse.json({ error: 'ข้อมูลนี้ซ้ำกับที่มีอยู่ในระบบแล้ว (เช่น เบอร์โทรหรืออีเมล)' }, { status: 409, headers: cors })
     }
     return NextResponse.json({ error: error.message }, { status: 500, headers: cors })
@@ -149,7 +150,7 @@ export async function DELETE(req: Request) {
 
     return NextResponse.json({ message: 'ลบนักกายภาพสำเร็จ' }, { headers: cors })
   } catch (error: any) {
-    if (error.code === '23505') {
+    if (pgErrorCode(error) === '23505') {
       return NextResponse.json({ error: 'ข้อมูลนี้ซ้ำกับที่มีอยู่ในระบบแล้ว (เช่น เบอร์โทรหรืออีเมล)' }, { status: 409, headers: cors })
     }
     return NextResponse.json({ error: error.message }, { status: 500, headers: cors })

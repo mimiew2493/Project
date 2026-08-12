@@ -22,8 +22,16 @@ const patientName = (p: Patient) => {
   return name || p.patient_id
 }
 
-interface EditForm { firstName: string; lastName: string; phone: string; medicalCondition: string; weight: string; address: string }
-const emptyEdit: EditForm = { firstName: '', lastName: '', phone: '', medicalCondition: '', weight: '', address: '' }
+interface EditForm {
+  firstName: string; lastName: string; phone: string; email: string; birthDate: string; gender: string
+  medicalCondition: string; weight: string; address: string; caretakerName: string; caretakerPhone: string
+  affectedSide: string; affectedAreas: string
+}
+const emptyEdit: EditForm = {
+  firstName: '', lastName: '', phone: '', email: '', birthDate: '', gender: '',
+  medicalCondition: '', weight: '', address: '', caretakerName: '', caretakerPhone: '',
+  affectedSide: '', affectedAreas: '',
+}
 
 const Field = ({ label, children }: { label: string; children: React.ReactNode }) => (
   <div className="field"><label className="field-label">{label}</label>{children}</div>
@@ -84,11 +92,14 @@ export default function PatientsPage({ onRegister }: Props) {
     setEditingId(p.patient_id)
     setEditForm({
       firstName: p.first_name ?? '', lastName: p.last_name ?? '', phone: p.phone ?? '',
+      email: p.email ?? '', birthDate: p.birth_date ?? '', gender: p.gender ?? '',
       medicalCondition: p.medical_condition ?? '', weight: p.weight ?? '', address: p.address ?? '',
+      caretakerName: p.caretaker_name ?? '', caretakerPhone: p.caretaker_phone ?? '',
+      affectedSide: p.affected_side ?? '', affectedAreas: p.affected_areas ?? '',
     })
   }
   const cancelEdit = () => { setEditingId(null); setEditForm(emptyEdit) }
-  const ch = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
+  const ch = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
     setEditForm(prev => ({ ...prev, [e.target.name]: e.target.value }))
 
   const saveEdit = async () => {
@@ -101,7 +112,10 @@ export default function PatientsPage({ onRegister }: Props) {
       body: JSON.stringify({
         patientId: p.patient_id, usersId: p.users_id,
         firstName: editForm.firstName, lastName: editForm.lastName, phone: editForm.phone,
+        email: editForm.email, birthDate: editForm.birthDate || null, gender: editForm.gender,
         medicalCondition: editForm.medicalCondition, weight: editForm.weight, address: editForm.address,
+        caretakerName: editForm.caretakerName, caretakerPhone: editForm.caretakerPhone,
+        affectedSide: editForm.affectedSide, affectedAreas: editForm.affectedAreas,
       }),
     }).catch(() => null)
     if (res?.ok) { showToast('แก้ไขข้อมูลสำเร็จ'); cancelEdit(); load() }
@@ -181,10 +195,26 @@ export default function PatientsPage({ onRegister }: Props) {
           <div className="grid2">
             <Field label="ชื่อ"><input className="inp" name="firstName" value={editForm.firstName} onChange={ch} placeholder="ระบุชื่อ" /></Field>
             <Field label="นามสกุล"><input className="inp" name="lastName" value={editForm.lastName} onChange={ch} placeholder="ระบุนามสกุล" /></Field>
+            <Field label="วัน/เดือน/ปีเกิด"><input className="inp" name="birthDate" type="date" value={editForm.birthDate} onChange={ch} /></Field>
+            <Field label="เพศ">
+              <select className="inp" name="gender" value={editForm.gender} onChange={ch}>
+                <option value="">เลือก...</option><option value="ชาย">ชาย</option><option value="หญิง">หญิง</option><option value="ไม่ระบุ">ไม่ระบุ</option>
+              </select>
+            </Field>
             <Field label="เบอร์ติดต่อ"><input className="inp mono" name="phone" value={editForm.phone} onChange={ch} placeholder="08X-XXX-XXXX" /></Field>
+            <Field label="อีเมล"><input className="inp" name="email" value={editForm.email} onChange={ch} placeholder="example@mail.com" /></Field>
             <Field label="น้ำหนัก (kg)"><input className="inp" name="weight" type="number" step="0.01" value={editForm.weight} onChange={ch} /></Field>
+            <Field label="ข้างที่รักษา">
+              <select className="inp" name="affectedSide" value={editForm.affectedSide} onChange={ch}>
+                <option value="">ยังไม่ระบุ</option>
+                <option value="ข้างซ้าย">ข้างซ้าย</option><option value="ข้างขวา">ข้างขวา</option><option value="ทั้งสองข้าง">ทั้งสองข้าง</option>
+              </select>
+            </Field>
+            <Field label="ชื่อผู้ดูแลหลัก"><input className="inp" name="caretakerName" value={editForm.caretakerName} onChange={ch} placeholder="เช่น นางสมศรี ใจดี (มารดา)" /></Field>
+            <Field label="เบอร์โทรผู้ดูแลหลัก"><input className="inp mono" name="caretakerPhone" value={editForm.caretakerPhone} onChange={ch} placeholder="08X-XXX-XXXX" /></Field>
           </div>
           <Field label="ที่อยู่"><textarea className="inp" name="address" rows={2} value={editForm.address} onChange={ch} /></Field>
+          <Field label="บริเวณที่ได้รับผลกระทบ"><input className="inp" name="affectedAreas" value={editForm.affectedAreas} onChange={ch} placeholder="เช่น มือ, ข้อมือ, ไหล่" /></Field>
           <Field label="อาการ/หมายเหตุ"><textarea className="inp" name="medicalCondition" rows={2} value={editForm.medicalCondition} onChange={ch} /></Field>
           <div className="form-actions">
             <button className="btn btn-ghost btn-sm" onClick={cancelEdit} disabled={saving}>ยกเลิก</button>
@@ -230,6 +260,9 @@ export default function PatientsPage({ onRegister }: Props) {
                       </div>
                       <div className="patient-meta">
                         รหัส: {p.patient_id} · อาการ: {p.medical_condition ?? '—'} · น้ำหนัก: {p.weight ?? '—'} kg · วันที่: {p.register_date ?? '—'}
+                      </div>
+                      <div className="patient-meta">
+                        ผู้ดูแลหลัก: {p.caretaker_name ?? '—'}{p.caretaker_phone ? ` · ${p.caretaker_phone}` : ''}
                       </div>
                     </div>
                   </div>

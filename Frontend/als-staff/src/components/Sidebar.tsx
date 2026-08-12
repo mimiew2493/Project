@@ -1,19 +1,22 @@
 import type { ComponentType } from 'react'
 import type { AuthUser, PageKey } from '../types'
-import { UsersIcon, UserPlusIcon, StethoscopeIcon, BoxIcon, CalendarIcon, BarChartIcon, UserMdIcon, UserIcon, LogOutIcon, type IconProps } from './Icon'
+import { UsersIcon, UserPlusIcon, BoxIcon, CalendarIcon, BarChartIcon, UserMdIcon, UserIcon, LogOutIcon, HomeIcon, ClipboardListIcon, type IconProps } from './Icon'
 
 const STAFF_NAV: { key: PageKey; label: string; icon: ComponentType<IconProps> }[] = [
   { key: 'queue',      label: 'คิวรับผู้ป่วย',        icon: UsersIcon },
   { key: 'register',   label: 'ลงทะเบียนผู้ป่วยใหม่', icon: UserPlusIcon },
-  { key: 'therapists', label: 'จัดการนักกายภาพ',      icon: StethoscopeIcon },
+  { key: 'therapists', label: 'จัดการนักกายภาพ',      icon: UserMdIcon },
   { key: 'devices',    label: 'คลังอุปกรณ์',          icon: BoxIcon },
   { key: 'schedule',   label: 'ตารางนัดรวม',          icon: CalendarIcon },
+  { key: 'programs',   label: 'คลังโปรแกรมฝึก',       icon: ClipboardListIcon },
   { key: 'overview',   label: 'ภาพรวมศูนย์',          icon: BarChartIcon },
 ]
 
 const THERAPIST_NAV: { key: PageKey; label: string; icon: ComponentType<IconProps> }[] = [
+  { key: 'my-home',     label: 'หน้าแรก',        icon: HomeIcon },
   { key: 'my-cases',    label: 'เคสของฉัน',      icon: UserMdIcon },
   { key: 'my-schedule', label: 'ตารางนัดของฉัน',  icon: CalendarIcon },
+  { key: 'programs',    label: 'คลังโปรแกรมฝึก',  icon: ClipboardListIcon },
   { key: 'my-profile',  label: 'โปรไฟล์ของฉัน',   icon: UserIcon },
 ]
 
@@ -27,7 +30,7 @@ export default function Sidebar({ page, onNavigate, user, onLogout }: Props) {
     <nav className="sidebar">
       <div className="sidebar-logo">
         <h2>ALS Rehab</h2>
-        <p>บุคลากร · เวชระเบียน</p>
+        <p>บุคลากร ·</p>
       </div>
       <div className="sidebar-nav">
         {nav.map(n => (

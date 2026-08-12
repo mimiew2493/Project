@@ -9,8 +9,10 @@ import RegisterPage from './pages/staff/RegisterPage'
 import TherapistsPage from './pages/staff/TherapistsPage'
 import DevicesPage from './pages/staff/DevicesPage'
 import OverviewPage from './pages/staff/OverviewPage'
+import TherapistHomePage from './pages/therapist/HomePage'
 import MyCasesPage from './pages/therapist/MyCasesPage'
 import ProfilePage from './pages/therapist/ProfilePage'
+import ProgramLibraryPage from './pages/shared/ProgramLibraryPage'
 import PatientHomePage from './pages/patient/PatientHomePage'
 import PatientAppointmentsPage from './pages/patient/PatientAppointmentsPage'
 import PatientStatsPage from './pages/patient/PatientStatsPage'
@@ -21,8 +23,8 @@ export interface ResumeTarget { patientId: string; usersId: string }
 
 interface Session { token: string; user: AuthUser }
 
-const STAFF_PAGES: PageKey[] = ['queue', 'register', 'therapists', 'devices', 'schedule', 'overview']
-const THERAPIST_PAGES: PageKey[] = ['my-cases', 'my-schedule', 'my-profile']
+const STAFF_PAGES: PageKey[] = ['queue', 'register', 'therapists', 'devices', 'schedule', 'overview', 'programs']
+const THERAPIST_PAGES: PageKey[] = ['my-home', 'my-cases', 'my-schedule', 'programs', 'my-profile']
 const PATIENT_PAGES: PageKey[] = ['patient-home', 'patient-appointments', 'patient-stats', 'patient-feedback', 'patient-profile']
 
 const loadSession = (): Session | null => {
@@ -41,7 +43,7 @@ export default function App() {
     const s = { token, user }
     localStorage.setItem('als-session', JSON.stringify(s))
     setSession(s)
-    setPage(user.role_id === 'R002' ? 'my-cases' : user.role_id === 'R001' ? 'patient-home' : 'queue')
+    setPage(user.role_id === 'R002' ? 'my-home' : user.role_id === 'R001' ? 'patient-home' : 'queue')
   }
 
   const handleLogout = () => {
@@ -102,8 +104,11 @@ export default function App() {
           {!isTherapist && effectivePage === 'devices'    && <DevicesPage />}
           {!isTherapist && effectivePage === 'schedule'   && <SchedulePage />}
           {!isTherapist && effectivePage === 'overview'   && <OverviewPage />}
+          {!isTherapist && effectivePage === 'programs'   && <ProgramLibraryPage usersId={session.user.users_id} roleId={session.user.role_id} />}
+          {isTherapist && effectivePage === 'my-home'     && <TherapistHomePage otId={session.user.ot_id ?? ''} firstName={session.user.first_name} />}
           {isTherapist && effectivePage === 'my-cases'    && <MyCasesPage otId={session.user.ot_id ?? ''} usersId={session.user.users_id} />}
           {isTherapist && effectivePage === 'my-schedule' && <SchedulePage lockOtId={session.user.ot_id ?? undefined} />}
+          {isTherapist && effectivePage === 'programs'    && <ProgramLibraryPage usersId={session.user.users_id} roleId={session.user.role_id} />}
           {isTherapist && effectivePage === 'my-profile'  && <ProfilePage user={session.user} onLogout={handleLogout} />}
         </div>
       </div>

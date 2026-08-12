@@ -8,7 +8,7 @@ interface Props { patientId: string }
 
 const fmt = (iso: string) => new Date(iso).toLocaleString('th-TH', { dateStyle: 'medium', timeStyle: 'short' })
 
-const STEP_LABEL: Record<number, string> = { 1: 'รับเรื่อง + ลงทะเบียน', 2: 'รอนัดหมาย', 3: 'จับคู่อุปกรณ์' }
+const STEP_LABEL: Record<number, string> = { 1: 'รับเรื่อง + ลงทะเบียน', 2: 'โปรแกรมฝึก + จับคู่อุปกรณ์', 3: 'นัดตรวจเช็คอุปกรณ์' }
 
 export default function PatientHomePage({ patientId }: Props) {
   const [patient, setPatient] = useState<Patient | null>(null)
@@ -43,7 +43,7 @@ export default function PatientHomePage({ patientId }: Props) {
   return (
     <div className="stack">
       <div className="hero-card">
-        <div style={{ fontSize: 19, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>สวัสดี, {name.split(' ')[0]} <WaveIcon size={20} /></div>
+        <div style={{ fontSize: 19, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>สวัสดี, {name.split(' ')[0]} </div>
         <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>รหัส: {patient.patient_id}</div>
         <div style={{ marginTop: 10 }}>
           {patient.status === 'COMPLETED'

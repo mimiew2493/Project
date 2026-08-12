@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
-import type { Device } from '../../types'
+import type { Device, Therapist } from '../../types'
 import SearchBar from '../../components/SearchBar'
-import { XIcon } from '../../components/Icon'
+import { XIcon, CalendarIcon } from '../../components/Icon'
 import { API_BASE } from '../../config'
 
 const STATUS_LABEL: Record<string, string> = { ACTIVE: 'ใช้งานได้', MAINTENANCE: 'ส่งซ่อม' }
@@ -17,6 +17,9 @@ const FILTERS = [
 interface FormData { deviceName: string; serialNumber: string; status: string }
 const emptyForm: FormData = { deviceName: '', serialNumber: '', status: 'ACTIVE' }
 
+interface CheckForm { date: string; time: string; durationMin: string; otId: string; note: string }
+const emptyCheckForm: CheckForm = { date: '', time: '', durationMin: '30', otId: '', note: '' }
+
 const Field = ({ label, req, children }: { label: string; req?: boolean; children: React.ReactNode }) => (
   <div className="field"><label className="field-label">{label} {req && <span className="req">*</span>}</label>{children}</div>
 )
@@ -25,6 +28,7 @@ const fmtDate = (iso: string) => new Date(iso).toLocaleDateString('th-TH', { dat
 
 export default function DevicesPage() {
   const [devices, setDevices] = useState<Device[]>([])
+  const [therapists, setTherapists] = useState<Therapist[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState('all')
@@ -33,12 +37,42 @@ export default function DevicesPage() {
   const [form, setForm] = useState<FormData>(emptyForm)
   const [saving, setSaving] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
+  const [bookingDeviceId, setBookingDeviceId] = useState<string | null>(null)
+  const [checkForm, setCheckForm] = useState<CheckForm>(emptyCheckForm)
+  const [booking, setBooking] = useState(false)
 
   const load = () => {
     fetch(`${API_BASE}/api/devices`)
       .then(r => r.json()).then(d => { if (Array.isArray(d)) setDevices(d); setLoading(false) }).catch(() => setLoading(false))
   }
   useEffect(load, [])
+  useEffect(() => {
+    fetch(`${API_BASE}/api/therapists`)
+      .then(r => r.json()).then(d => { if (Array.isArray(d)) setTherapists(d) }).catch(() => {})
+  }, [])
+
+  const openBookCheck = (d: Device) => { setBookingDeviceId(d.device_id); setCheckForm(emptyCheckForm) }
+  const closeBookCheck = () => { setBookingDeviceId(null); setCheckForm(emptyCheckForm) }
+
+  const bookCheck = async (d: Device) => {
+    if (!d.holder_patient_id) return
+    if (!checkForm.date || !checkForm.time) { alert('กรุณาเลือกวันและเวลานัด'); return }
+    if (!checkForm.otId) { alert('กรุณาเลือกนักกิจกรรมบำบัดผู้ตรวจเช็ค'); return }
+    setBooking(true)
+    const res = await fetch(`${API_BASE}/api/appointments`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        patientId: d.holder_patient_id, otId: checkForm.otId, deviceId: d.device_id,
+        appointmentDate: `${checkForm.date}T${checkForm.time}:00`,
+        durationMin: Number(checkForm.durationMin) || 30,
+        note: checkForm.note || 'นัดตรวจเช็คอุปกรณ์ IoT',
+        status: 'SCHEDULED',
+      }),
+    }).catch(() => null)
+    if (res?.ok) { showToast('นัดตรวจเช็คอุปกรณ์สำเร็จ'); closeBookCheck() }
+    else alert('นัดไม่สำเร็จ')
+    setBooking(false)
+  }
 
   const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 3000) }
 
@@ -95,7 +129,7 @@ export default function DevicesPage() {
     <>
       {toast && <div className="toast toast-success">{toast}</div>}
       <div className="h-sec">
-        <div><h1 className="page-title">คลังอุปกรณ์ IoT</h1><p className="page-sub">อุปกรณ์เป็นทรัพย์สินของศูนย์ที่ต้องยืม–คืน–ซ่อม ต้องรู้ว่าเครื่องไหนอยู่กับใคร</p></div>
+        <div><h1 className="page-title">คลังอุปกรณ์ IoT</h1><p className="page-sub">อุปกรณ์เป็นทรัพย์สินของศูนย์ที่ต้องยืม–คืน–ซ่อม และนัดตรวจเช็คเป็นระยะ ต้องรู้ว่าเครื่องไหนอยู่กับใคร</p></div>
         <button className="btn btn-sm" onClick={() => (showForm ? closeForm() : openAddForm())}>
           {showForm ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><XIcon size={13} /> ปิดฟอร์ม</span> : '+ เพิ่มอุปกรณ์'}
         </button>
@@ -142,17 +176,51 @@ export default function DevicesPage() {
             {filtered.length === 0
               ? <tr><td colSpan={6} style={{ textAlign: 'center', padding: 30, color: 'var(--muted)' }}>ไม่พบข้อมูล</td></tr>
               : filtered.map(d => (
-                  <tr key={d.device_id}>
-                    <td className="mono"><b>{d.device_id}</b></td>
-                    <td>{d.device_name}</td>
-                    <td>{d.holder_name || '—'}</td>
-                    <td style={{ color: 'var(--muted)' }}>{d.issued_date ? fmtDate(d.issued_date) : '—'}</td>
-                    <td><span className={`pill ${STATUS_PILL[d.status] ?? ''}`}>{STATUS_LABEL[d.status] ?? d.status}</span></td>
-                    <td style={{ textAlign: 'right', display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
-                      <button className="btn btn-ghost btn-sm" onClick={() => startEdit(d)}>แก้ไข</button>
-                      <button className="btn btn-ghost btn-sm" onClick={() => removeDevice(d)}>ลบ</button>
-                    </td>
-                  </tr>
+                  <>
+                    <tr key={d.device_id}>
+                      <td className="mono"><b>{d.device_id}</b></td>
+                      <td>{d.device_name}</td>
+                      <td>{d.holder_name || '—'}</td>
+                      <td style={{ color: 'var(--muted)' }}>{d.issued_date ? fmtDate(d.issued_date) : '—'}</td>
+                      <td><span className={`pill ${STATUS_PILL[d.status] ?? ''}`}>{STATUS_LABEL[d.status] ?? d.status}</span></td>
+                      <td style={{ textAlign: 'right', display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                        {d.holder_patient_id && (
+                          <button className="btn btn-ghost btn-sm" onClick={() => (bookingDeviceId === d.device_id ? closeBookCheck() : openBookCheck(d))}>
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><CalendarIcon size={12} /> นัดตรวจเช็ค</span>
+                          </button>
+                        )}
+                        <button className="btn btn-ghost btn-sm" onClick={() => startEdit(d)}>แก้ไข</button>
+                        <button className="btn btn-ghost btn-sm" onClick={() => removeDevice(d)}>ลบ</button>
+                      </td>
+                    </tr>
+                    {bookingDeviceId === d.device_id && (
+                      <tr>
+                        <td colSpan={6} style={{ background: 'var(--canvas)', padding: 16 }}>
+                          <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 10 }}>
+                            นัดตรวจเช็คอุปกรณ์ {d.device_id} · ผู้ถือครอง: {d.holder_name}
+                          </div>
+                          <div className="grid3" style={{ marginBottom: 10 }}>
+                            <Field label="วันที่นัด" req><input className="inp" type="date" value={checkForm.date} onChange={e => setCheckForm(p => ({ ...p, date: e.target.value }))} /></Field>
+                            <Field label="เวลา" req><input className="inp" type="time" value={checkForm.time} onChange={e => setCheckForm(p => ({ ...p, time: e.target.value }))} /></Field>
+                            <Field label="ระยะเวลา (นาที)"><input className="inp" type="number" min="1" value={checkForm.durationMin} onChange={e => setCheckForm(p => ({ ...p, durationMin: e.target.value }))} /></Field>
+                          </div>
+                          <div className="grid2" style={{ marginBottom: 10 }}>
+                            <Field label="นักกิจกรรมบำบัดผู้ตรวจเช็ค" req>
+                              <select className="inp" value={checkForm.otId} onChange={e => setCheckForm(p => ({ ...p, otId: e.target.value }))}>
+                                <option value="">เลือก...</option>
+                                {therapists.map(t => <option key={t.ot_id} value={t.ot_id}>กภ. {t.first_name} {t.last_name}</option>)}
+                              </select>
+                            </Field>
+                            <Field label="หมายเหตุ"><input className="inp" value={checkForm.note} onChange={e => setCheckForm(p => ({ ...p, note: e.target.value }))} placeholder="นัดตรวจเช็คอุปกรณ์ IoT" /></Field>
+                          </div>
+                          <div className="form-actions" style={{ justifyContent: 'flex-start' }}>
+                            <button className="btn btn-ghost btn-sm" onClick={closeBookCheck}>ยกเลิก</button>
+                            <button className="btn btn-sm" onClick={() => bookCheck(d)} disabled={booking}>{booking ? 'กำลังบันทึก...' : 'ยืนยันนัด'}</button>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </>
                 ))
             }
           </tbody>

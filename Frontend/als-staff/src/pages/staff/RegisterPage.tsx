@@ -1,9 +1,10 @@
 import { useState, useEffect, useMemo } from 'react'
-import type { Therapist, Device, PatientAppointment } from '../../types'
+import type { Therapist, Device, PatientAppointment, Program } from '../../types'
 import type { ResumeTarget } from '../../App'
 import Stepper from '../../components/Stepper'
 import SideBadge from '../../components/SideBadge'
 import { CheckCircleIcon, XCircleIcon, FileTextIcon, BarChartIcon, ClipboardIcon, ArrowLeftIcon, ArrowRightIcon, ArrowLeftRightIcon, CheckIcon } from '../../components/Icon'
+import { STAGE_LABEL } from '../shared/ProgramLibraryPage'
 import { API_BASE } from '../../config'
 
 const TIMES = ['08', '09', '10', '11', '12', '13', '14', '15', '16']
@@ -24,9 +25,14 @@ const startOfWeek = (base: Date) => {
   return d
 }
 
+const toLocalYMD = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+const toLocalHM = (d: Date) =>
+  `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+
 type Side = 'ข้างซ้าย' | 'ข้างขวา' | 'ทั้งสองข้าง' | ''
-const EMPTY_FORM = { firstName:'', lastName:'', birthDate:'', gender:'', address:'', phone:'', email:'', caretaker:'', medicalCondition:'', weight:'' }
-const EMPTY_APPT = { date:'', time:'', durationMin:'60', note:'' }
+const EMPTY_FORM = { firstName:'', lastName:'', birthDate:'', gender:'', address:'', phone:'', email:'', caretakerName:'', caretakerPhone:'', medicalCondition:'', weight:'' }
+const EMPTY_APPT = { date:'', time:'', durationMin:'30', note:'' }
 
 const Field = ({ label, req, children }: { label: React.ReactNode; req?: boolean; children: React.ReactNode }) => (
   <div className="field">
@@ -41,8 +47,10 @@ export default function RegisterPage({ step, setStep, onBack, resume }: Props) {
   const [therapists, setTherapists] = useState<Therapist[]>([])
   const [devices, setDevices] = useState<Device[]>([])
   const [otherAppts, setOtherAppts] = useState<PatientAppointment[]>([])
+  const [programs, setPrograms] = useState<Program[]>([])
   const [selectedOt, setSelectedOt] = useState('')
   const [selectedDevice, setSelectedDevice] = useState('')
+  const [selectedProgramId, setSelectedProgramId] = useState('')
   const [weekOffset, setWeekOffset] = useState(0)
   const [side, setSide] = useState<Side>('')
   const [form, setForm] = useState(EMPTY_FORM)
@@ -60,6 +68,8 @@ export default function RegisterPage({ step, setStep, onBack, resume }: Props) {
       .then(r => r.json()).then(d => { if (Array.isArray(d)) setDevices(d) }).catch(() => {})
     fetch(`${API_BASE}/api/appointments`)
       .then(r => r.json()).then(d => { if (Array.isArray(d)) setOtherAppts(d) }).catch(() => {})
+    fetch(`${API_BASE}/api/programs`)
+      .then(r => r.json()).then(d => { if (Array.isArray(d)) setPrograms(d) }).catch(() => {})
   }, [])
 
   useEffect(() => {
@@ -73,7 +83,8 @@ export default function RegisterPage({ step, setStep, onBack, resume }: Props) {
         setForm({
           firstName: d.first_name ?? '', lastName: d.last_name ?? '', birthDate: d.birth_date ?? '',
           gender: d.gender ?? '', address: d.address ?? '', phone: d.phone ?? '', email: d.email ?? '',
-          caretaker: '', medicalCondition: d.medical_condition ?? '', weight: d.weight ?? '',
+          caretakerName: d.caretaker_name ?? '', caretakerPhone: d.caretaker_phone ?? '',
+          medicalCondition: d.medical_condition ?? '', weight: d.weight ?? '',
         })
         setSide((d.affected_side ?? '') as Side)
         if (d.appointment) {
@@ -82,8 +93,8 @@ export default function RegisterPage({ step, setStep, onBack, resume }: Props) {
           setSelectedDevice(d.appointment.device_id ?? '')
           const dt = new Date(d.appointment.appointment_date)
           setAppt({
-            date: dt.toISOString().slice(0, 10), time: dt.toISOString().slice(11, 16),
-            durationMin: String(d.appointment.duration_min ?? 60), note: d.appointment.note ?? '',
+            date: toLocalYMD(dt), time: toLocalHM(dt),
+            durationMin: String(d.appointment.duration_min ?? 30), note: d.appointment.note ?? '',
           })
         }
       })
@@ -122,6 +133,7 @@ export default function RegisterPage({ step, setStep, onBack, resume }: Props) {
   // ขั้นที่ 1: รับเรื่อง + ลงทะเบียน — สร้างผู้ป่วยเข้าคิว (ถ้ายังไม่เคยสร้าง) แล้วบันทึกข้อมูลส่วนตัว + การแพทย์ + ข้างที่รักษา
   const goStep2 = async () => {
     if (!form.firstName || !form.lastName || !form.phone) { alert('กรุณาระบุชื่อ นามสกุล และเบอร์ติดต่อ'); return }
+    if (!form.caretakerName || !form.caretakerPhone) { alert('กรุณาระบุชื่อและเบอร์โทรผู้ดูแลหลัก'); return }
     if (!side) { alert('กรุณาเลือกข้างที่รักษาก่อน'); return }
     setSaving(true)
     try {
@@ -143,6 +155,7 @@ export default function RegisterPage({ step, setStep, onBack, resume }: Props) {
           firstName: form.firstName, lastName: form.lastName, birthDate: form.birthDate || null,
           gender: form.gender, phone: form.phone, email: form.email,
           address: form.address, weight: form.weight, medicalCondition: form.medicalCondition,
+          caretakerName: form.caretakerName, caretakerPhone: form.caretakerPhone,
           affectedSide: side,
         }),
       })
@@ -153,8 +166,30 @@ export default function RegisterPage({ step, setStep, onBack, resume }: Props) {
     setSaving(false)
   }
 
-  // ขั้นที่ 2: บันทึกนัดหมายครั้งแรก
+  // ขั้นที่ 2: โปรแกรมการฝึก + จับคู่อุปกรณ์
   const goStep3 = async () => {
+    if (!ids) { alert('เกิดข้อผิดพลาด กรุณาเริ่มจากขั้นที่ 1'); return }
+    setSaving(true)
+    try {
+      const res = await fetch(`${API_BASE}/api/register`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ patientId: ids.patientId, usersId: ids.usersId, step: 2 }),
+      })
+      const data = await res.json()
+      if (!res.ok) { alert(data.error ?? 'บันทึกไม่สำเร็จ'); return }
+      if (selectedProgramId && selectedOt) {
+        await fetch(`${API_BASE}/api/patient-programs`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ patientId: ids.patientId, programId: selectedProgramId, otId: selectedOt }),
+        }).catch(() => null)
+      }
+      setStep(3)
+    } catch { alert('ไม่สามารถเชื่อมต่อ Backend ได้') }
+    setSaving(false)
+  }
+
+  // ขั้นที่ 3: นัดตรวจเช็คอุปกรณ์ครั้งแรก + ปิดการลงทะเบียน
+  const finish = async () => {
     if (!appt.date || !appt.time) { alert('กรุณาเลือกวันที่และเวลานัด'); return }
     if (!ids) { alert('เกิดข้อผิดพลาด กรุณาเริ่มจากขั้นที่ 1'); return }
     setSaving(true)
@@ -162,40 +197,21 @@ export default function RegisterPage({ step, setStep, onBack, resume }: Props) {
       const res = await fetch(`${API_BASE}/api/register`, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          patientId: ids.patientId, usersId: ids.usersId, step: 2, appointmentId: apptId,
-          otId: selectedOt || null, appointmentDate: `${appt.date}T${appt.time}:00`,
+          patientId: ids.patientId, usersId: ids.usersId, step: 3, appointmentId: apptId,
+          otId: selectedOt || null, deviceId: selectedDevice || null,
+          appointmentDate: `${appt.date}T${appt.time}:00`,
           durationMin: Number(appt.durationMin), treatedSide: side, appointmentNote: appt.note || null,
         }),
       })
       const data = await res.json()
-      if (!res.ok) { alert(data.error ?? 'บันทึกไม่สำเร็จ'); return }
-      if (data.appointment_id) setApptId(data.appointment_id)
-      setStep(3)
-    } catch { alert('ไม่สามารถเชื่อมต่อ Backend ได้') }
-    setSaving(false)
-  }
-
-  // ขั้นที่ 3: ปิดการลงทะเบียน
-  const finish = async () => {
-    if (!ids) { alert('เกิดข้อผิดพลาด กรุณาเริ่มจากขั้นที่ 1'); return }
-    setSaving(true)
-    try {
-      const res = await fetch(`${API_BASE}/api/register`, {
-        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          patientId: ids.patientId, usersId: ids.usersId, step: 3,
-          appointmentId: apptId, deviceId: selectedDevice || null,
-        }),
-      })
-      const data = await res.json()
-      setResult(res.ok ? { success: true, message: 'ลงทะเบียนสำเร็จ', patientId: ids.patientId, appointmentId: apptId }
+      setResult(res.ok ? { success: true, message: 'ลงทะเบียนสำเร็จ', patientId: ids.patientId, appointmentId: data.appointment_id ?? apptId }
         : { success: false, message: data.error ?? 'เกิดข้อผิดพลาด' })
     } catch { setResult({ success: false, message: 'ไม่สามารถเชื่อมต่อ Backend ได้' }) }
     setSaving(false)
   }
 
   const reset = () => {
-    setResult(null); setStep(1); setSide(''); setSelectedOt(''); setSelectedDevice(''); setWeekOffset(0)
+    setResult(null); setStep(1); setSide(''); setSelectedOt(''); setSelectedDevice(''); setSelectedProgramId(''); setWeekOffset(0)
     setForm(EMPTY_FORM); setAppt(EMPTY_APPT); setIds(null); setApptId(null)
   }
 
@@ -213,7 +229,7 @@ export default function RegisterPage({ step, setStep, onBack, resume }: Props) {
           {side && <p style={{ fontSize: 13, color: 'var(--muted)' }}>ข้างที่รักษา: <SideBadge side={side} /></p>}
           {result.appointmentId && (
             <p style={{ fontSize: 13, color: 'var(--muted)' }}>
-              นัดครั้งแรก: <b className="mono">{result.appointmentId}</b> · {appt.date} {appt.time} น.
+              นัดตรวจเช็คอุปกรณ์ครั้งแรก: <b className="mono">{result.appointmentId}</b> · {appt.date} {appt.time} น.
             </p>
           )}
           <div className="export-row" style={{ justifyContent: 'center', marginTop: 16 }}>
@@ -259,7 +275,8 @@ export default function RegisterPage({ step, setStep, onBack, resume }: Props) {
                 <Field label="เบอร์ติดต่อ" req><input className="inp mono" name="phone" value={form.phone} onChange={ch} placeholder="08X-XXX-XXXX" /></Field>
                 <Field label="อีเมล"><input className="inp" name="email" value={form.email} onChange={ch} placeholder="example@mail.com" /></Field>
                 <Field label="น้ำหนัก (kg)"><input className="inp" name="weight" type="number" step="0.01" value={form.weight} onChange={ch} placeholder="65.50" /></Field>
-                <Field label="ผู้ดูแลหลัก" req><input className="inp" name="caretaker" value={form.caretaker} onChange={ch} placeholder="ชื่อ · เบอร์โทร" /></Field>
+                <Field label="ชื่อผู้ดูแลหลัก" req><input className="inp" name="caretakerName" value={form.caretakerName} onChange={ch} placeholder="เช่น นางสมศรี ใจดี (มารดา)" /></Field>
+                <Field label="เบอร์โทรผู้ดูแลหลัก" req><input className="inp mono" name="caretakerPhone" value={form.caretakerPhone} onChange={ch} placeholder="08X-XXX-XXXX" /></Field>
               </div>
             </div>
             <div className="card">
@@ -317,12 +334,73 @@ export default function RegisterPage({ step, setStep, onBack, resume }: Props) {
         </div>
       )}
 
-      {/* ขั้นที่ 2: นัดหมาย */}
+      {/* ขั้นที่ 2: โปรแกรมการฝึก + จับคู่อุปกรณ์ */}
       {step === 2 && (
+        <div className="reg-grid">
+          <div className="card">
+            <div className="h-sec"><span className="h-sec-title">โปรแกรมการฝึกเริ่มต้น</span></div>
+            <Field label="เลือกโปรแกรมจากคลังโปรแกรมฝึก">
+              <select className="inp" value={selectedProgramId} onChange={e => setSelectedProgramId(e.target.value)}>
+                <option value="">ยังไม่กำหนดโปรแกรม (ให้นักกายภาพกำหนดทีหลัง)</option>
+                {(['FLACCID', 'SPASTIC', 'RECOVERY'] as const).map(stage => {
+                  const opts = programs.filter(p => p.target_stage === stage && p.status !== 'INACTIVE')
+                  if (opts.length === 0) return null
+                  return (
+                    <optgroup key={stage} label={STAGE_LABEL[stage]}>
+                      {opts.map(p => <option key={p.program_id} value={p.program_id}>{p.program_name}</option>)}
+                    </optgroup>
+                  )
+                })}
+              </select>
+            </Field>
+            {programs.length === 0 && (
+              <div className="note" style={{ marginBottom: 12 }}>ยังไม่มีโปรแกรมในคลัง — ให้นักกายภาพสร้างโปรแกรมได้ที่หน้า "คลังโปรแกรมฝึก"</div>
+            )}
+            <div className="h-sec" style={{ marginTop: 16 }}><span className="h-sec-title">จ่ายอุปกรณ์</span></div>
+            <Field label="เลือกอุปกรณ์ว่าง">
+              <select className="inp" value={selectedDevice} onChange={e => setSelectedDevice(e.target.value)}>
+                <option value="">ไม่จ่ายอุปกรณ์ตอนนี้</option>
+                {availableDevices.map(d => <option key={d.device_id} value={d.device_id}>{d.device_id} — {d.device_name}</option>)}
+              </select>
+            </Field>
+            {availableDevices.length === 0 && (
+              <div className="note" style={{ marginBottom: 12 }}>ตอนนี้ไม่มีอุปกรณ์ที่พร้อมจ่าย — ไปเพิ่ม/ปล่อยอุปกรณ์ได้ที่หน้าคลังอุปกรณ์</div>
+            )}
+            {selectedDevice && (() => {
+              const d = devices.find(x => x.device_id === selectedDevice)
+              if (!d) return null
+              return (
+                <>
+                  <div className="kv"><span>สถานะอุปกรณ์</span><b style={{ color: 'var(--green)' }}>{STATUS_LABEL[d.status] ?? d.status}</b></div>
+                  <div className="kv"><span>หมายเลขซีเรียล</span><b className="mono">{d.serial_number}</b></div>
+                </>
+              )
+            })()}
+          </div>
+          <div className="stack">
+            <div className="summary-card">
+              <div className="h-sec"><span className="h-sec-title">สรุปเบื้องต้น</span></div>
+              <div className="kv"><span>รหัสผู้ป่วย</span><b className="mono" style={{ color: 'var(--green)' }}>{ids?.patientId}</b></div>
+              <div className="kv"><span>ชื่อ-นามสกุล</span><b>{form.firstName} {form.lastName}</b></div>
+              <div className="kv"><span>ข้างที่รักษา</span><SideBadge side={side} /></div>
+              <div className="kv"><span>นักกายภาพ</span><b>{therapists.find(t => t.ot_id === selectedOt)?.first_name ?? 'ยังไม่ได้เลือก'}</b></div>
+              <div className="kv"><span>อุปกรณ์</span><b className="mono">{selectedDevice || 'ยังไม่ได้เลือก'}</b></div>
+              <div className="kv"><span>โปรแกรมการฝึก</span><b>{programs.find(p => p.program_id === selectedProgramId)?.program_name ?? 'ยังไม่ได้เลือก'}</b></div>
+            </div>
+            <div className="form-actions">
+              <button className="btn btn-ghost" onClick={() => setStep(1)} disabled={saving}>← ย้อนกลับ</button>
+              <button className="btn" onClick={goStep3} disabled={saving}>{saving ? 'กำลังบันทึก...' : 'บันทึกและไปขั้นถัดไป →'}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ขั้นที่ 3: นัดตรวจเช็คอุปกรณ์ครั้งแรก + สรุป */}
+      {step === 3 && (
         <>
           <div className="card">
-            <div className="h-sec"><span className="h-sec-title">เลือกวันและเวลานัดหมายครั้งแรก</span></div>
-            <p className="page-sub">เลือกช่องว่างจากตาราง — ระบบตรวจสอบนักกายภาพว่างและอุปกรณ์พร้อมหรือไม่</p>
+            <div className="h-sec"><span className="h-sec-title">เลือกวันและเวลานัดตรวจเช็คอุปกรณ์ครั้งแรก</span></div>
+            <p className="page-sub">นัดหมายนี้คือนัดตรวจเช็คอุปกรณ์ IoT ไม่ใช่นัดตรวจอาการ — ไม่จำเป็นต้องนัดถี่</p>
             <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
               <button className="btn btn-ghost btn-sm" onClick={() => setWeekOffset(w => w - 1)}>← สัปดาห์ก่อน</button>
               <div style={{ flex: 1, textAlign: 'center', fontWeight: 600, padding: 6 }}>{weekLabel}</div>
@@ -336,7 +414,7 @@ export default function RegisterPage({ step, setStep, onBack, resume }: Props) {
                   <div key={h + '-label'} className="time-label mono">{h}:00<br /><small>–{String(Number(h) + 1).padStart(2, '0')}:00</small></div>
                   {weekDays.map((d, ci) => {
                     const booked = bookedCellMap.get(`${h}-${ci}`)
-                    const isSelected = appt.date === d.toISOString().slice(0, 10) && appt.time === `${h}:00`
+                    const isSelected = appt.date === toLocalYMD(d) && appt.time === `${h}:00`
                     if (booked) {
                       return (
                         <div key={ci} className="time-slot">
@@ -349,7 +427,7 @@ export default function RegisterPage({ step, setStep, onBack, resume }: Props) {
                     }
                     return (
                       <div key={ci} className="time-slot time-slot-empty" style={{ cursor: 'pointer' }}
-                           onClick={() => setAppt(p => ({ ...p, date: d.toISOString().slice(0, 10), time: `${h}:00` }))}>
+                           onClick={() => setAppt(p => ({ ...p, date: toLocalYMD(d), time: `${h}:00` }))}>
                         {isSelected ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><CheckIcon size={12} /> เลือกแล้ว</span> : '+ ว่าง'}
                       </div>
                     )
@@ -374,78 +452,33 @@ export default function RegisterPage({ step, setStep, onBack, resume }: Props) {
                         onChange={e => setAppt(p => ({ ...p, durationMin: e.target.value }))}>
                   <option value="30">30 นาที</option>
                   <option value="60">1 ชม.</option>
-                  <option value="90">1.5 ชม.</option>
-                  <option value="120">2 ชม.</option>
                 </select>
-              </Field>
-              <Field label="ข้างที่รักษาในนัดนี้">
-                <div style={{ paddingTop: 6 }}>{side ? <SideBadge side={side} /> : <span style={{ color: 'var(--muted)', fontSize: 12 }}>ยังไม่ได้เลือกในขั้นที่ 1</span>}</div>
               </Field>
             </div>
             <Field label="หมายเหตุการนัด">
               <input className="inp" value={appt.note} placeholder="เช่น ให้ญาติมาด้วย"
                      onChange={e => setAppt(p => ({ ...p, note: e.target.value }))} />
             </Field>
-          </div>
-          <div className="form-actions">
-            <button className="btn btn-ghost" onClick={() => setStep(1)} disabled={saving}>← ย้อนกลับ</button>
-            <button className="btn" onClick={goStep3} disabled={saving}>{saving ? 'กำลังบันทึก...' : 'ยืนยันนัดหมาย →'}</button>
-          </div>
-        </>
-      )}
 
-      {/* ขั้นที่ 3: จับคู่อุปกรณ์ + สรุป */}
-      {step === 3 && (
-        <div className="reg-grid">
-          <div className="card">
-            <div className="h-sec"><span className="h-sec-title">จ่ายอุปกรณ์</span></div>
-            <Field label="เลือกอุปกรณ์ว่าง">
-              <select className="inp" value={selectedDevice} onChange={e => setSelectedDevice(e.target.value)}>
-                <option value="">ไม่จ่ายอุปกรณ์ตอนนี้</option>
-                {availableDevices.map(d => <option key={d.device_id} value={d.device_id}>{d.device_id} — {d.device_name}</option>)}
-              </select>
-            </Field>
-            {availableDevices.length === 0 && (
-              <div className="note" style={{ marginBottom: 12 }}>ตอนนี้ไม่มีอุปกรณ์ที่พร้อมจ่าย — ไปเพิ่ม/ปล่อยอุปกรณ์ได้ที่หน้าคลังอุปกรณ์</div>
-            )}
-            {selectedDevice && (() => {
-              const d = devices.find(x => x.device_id === selectedDevice)
-              if (!d) return null
-              return (
-                <>
-                  <div className="kv"><span>สถานะอุปกรณ์</span><b style={{ color: 'var(--green)' }}>{STATUS_LABEL[d.status] ?? d.status}</b></div>
-                  <div className="kv"><span>หมายเลขซีเรียล</span><b className="mono">{d.serial_number}</b></div>
-                </>
-              )
-            })()}
-            <div className="h-sec" style={{ marginTop: 16 }}><span className="h-sec-title">Export ผลการรักษา</span></div>
-            <p style={{ fontSize: 11.5, color: 'var(--muted)', marginBottom: 10 }}>ดาวน์โหลดข้อมูลการรักษาได้ที่นี่</p>
-            <div className="export-row">
-              {EXPORT_FORMATS.map(({ label, Icon }) => (
-                <button key={label} className="export-btn" onClick={() => alert('Export ' + label + '...')}><span className="export-icon"><Icon size={20} /></span>{label}</button>
-              ))}
-            </div>
-          </div>
-          <div className="stack">
-            <div className="summary-card">
+            <div className="summary-card" style={{ marginTop: 16 }}>
               <div className="h-sec"><span className="h-sec-title">สรุปการลงทะเบียน</span></div>
               <div className="kv"><span>รหัสผู้ป่วย</span><b className="mono" style={{ color: 'var(--green)' }}>{ids?.patientId}</b></div>
               <div className="kv"><span>ชื่อ-นามสกุล</span><b>{form.firstName} {form.lastName}</b></div>
               <div className="kv"><span>ข้างที่รักษา</span><SideBadge side={side} /></div>
               <div className="kv"><span>นักกายภาพ</span><b>{therapists.find(t => t.ot_id === selectedOt)?.first_name ?? 'ยังไม่ได้เลือก'}</b></div>
-              <div className="kv"><span>นัดครั้งแรก</span><b>{appt.date && appt.time ? `${appt.date} · ${appt.time} น. (${appt.durationMin} นาที)` : 'ยังไม่ได้เลือก'}</b></div>
-              {appt.note && <div className="kv"><span>หมายเหตุนัด</span><span style={{ fontSize: 11.5 }}>{appt.note}</span></div>}
               <div className="kv"><span>อุปกรณ์</span><b className="mono">{selectedDevice || 'ยังไม่ได้เลือก'}</b></div>
+              <div className="kv"><span>โปรแกรมการฝึก</span><b>{programs.find(p => p.program_id === selectedProgramId)?.program_name ?? 'ยังไม่ได้เลือก'}</b></div>
+              <div className="kv"><span>นัดตรวจเช็คอุปกรณ์</span><b>{appt.date && appt.time ? `${appt.date} · ${appt.time} น. (${appt.durationMin} นาที)` : 'ยังไม่ได้เลือก'}</b></div>
             </div>
-            <div className="note note-pdpa"><b>PDPA</b> — ข้อมูลสุขภาพเป็นข้อมูลอ่อนไหว ต้องบันทึกความยินยอมก่อน</div>
-            <div className="form-actions">
-              <button className="btn btn-ghost" onClick={() => setStep(2)} disabled={saving}>← ย้อนกลับ</button>
-              <button className="btn btn-success" onClick={finish} disabled={saving}>
-                {saving ? 'กำลังบันทึก...' : <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><CheckIcon size={14} /> ยืนยันและเสร็จสิ้น</span>}
-              </button>
-            </div>
+            <div className="note note-pdpa" style={{ marginTop: 12 }}><b>PDPA</b> — ข้อมูลสุขภาพเป็นข้อมูลอ่อนไหว ต้องบันทึกความยินยอมก่อน</div>
           </div>
-        </div>
+          <div className="form-actions">
+            <button className="btn btn-ghost" onClick={() => setStep(2)} disabled={saving}>← ย้อนกลับ</button>
+            <button className="btn btn-success" onClick={finish} disabled={saving}>
+              {saving ? 'กำลังบันทึก...' : <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><CheckIcon size={14} /> ยืนยันและเสร็จสิ้น</span>}
+            </button>
+          </div>
+        </>
       )}
     </>
   )

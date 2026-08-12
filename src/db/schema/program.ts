@@ -22,6 +22,9 @@ export const programs = pgTable("programs", {
     length: 20,
   }).notNull(), // SYSTEM | CUSTOM
 
+  // ระยะอาการของโรคที่โปรแกรมนี้ออกแบบมาให้ — FLACCID | SPASTIC | RECOVERY, null = ใช้ได้ทุกระยะ
+  target_stage: varchar("target_stage", { length: 20 }),
+
   session_per_day: integer("session_per_day").notNull(),
 
   created_by: varchar("created_by", {

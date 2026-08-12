@@ -3,7 +3,8 @@ import { therapySessions } from '@/src/db/schema/therapySession'
 import { patientPrograms } from '@/src/db/schema/patientProgram'
 import { programs } from '@/src/db/schema/program'
 import { movementData } from '@/src/db/schema/movementData'
-import { eq, and, desc, sum } from 'drizzle-orm'
+import { appointments } from '@/src/db/schema/appointments'
+import { eq, and, desc, sum, isNotNull } from 'drizzle-orm'
 import { NextResponse } from 'next/server'
 
 const cors = {
@@ -17,14 +18,16 @@ export async function OPTIONS() {
 }
 
 // GET /api/sessions?patient_id=PAT000001 → ประวัติการฝึกจริงของผู้ป่วย (ตาราง therapy_sessions + movement_data)
+// GET /api/sessions?ot_id=OT000001       → ทุกเซสชันที่ฝึกภายใต้โปรแกรมที่นักกายภาพคนนี้มอบหมาย (สรุปผลงานของตัวเอง)
 export async function GET(req: Request) {
   try {
     const patientId = new URL(req.url).searchParams.get('patient_id')
-    if (!patientId) {
-      return NextResponse.json({ error: 'ต้องระบุ patient_id' }, { status: 400, headers: cors })
+    const otId = new URL(req.url).searchParams.get('ot_id')
+    if (!patientId && !otId) {
+      return NextResponse.json({ error: 'ต้องระบุ patient_id หรือ ot_id' }, { status: 400, headers: cors })
     }
 
-    const rows = await db
+    const query = db
       .select({
         session_id: therapySessions.session_id,
         session_date: therapySessions.session_date,
@@ -33,14 +36,17 @@ export async function GET(req: Request) {
         status: therapySessions.status,
         program_id: programs.program_id,
         program_name: programs.program_name,
+        patient_id: patientPrograms.patient_id,
         movement_count: sum(movementData.movement_count),
       })
       .from(therapySessions)
       .innerJoin(patientPrograms, eq(therapySessions.patient_program_id, patientPrograms.patient_program_id))
       .innerJoin(programs, eq(patientPrograms.program_id, programs.program_id))
       .leftJoin(movementData, eq(movementData.session_id, therapySessions.session_id))
-      .where(eq(patientPrograms.patient_id, patientId))
-      .groupBy(therapySessions.session_id, programs.program_id)
+
+    const rows = await query
+      .where(patientId ? eq(patientPrograms.patient_id, patientId) : eq(patientPrograms.assigned_by, otId!))
+      .groupBy(therapySessions.session_id, programs.program_id, patientPrograms.patient_id)
       .orderBy(desc(therapySessions.session_date))
 
     return NextResponse.json(rows, { headers: cors })
@@ -49,7 +55,7 @@ export async function GET(req: Request) {
   }
 }
 
-// POST /api/sessions → นักกายภาพบันทึกผลการฝึกจริงให้ผู้ป่วย (สร้าง program/patient_program อัตโนมัติถ้ายังไม่มี)
+// POST /api/sessions → นักกายภาพบันทึกผลการฝึกจริงให้ผู้ป่วย (ต้องมีโปรแกรมที่กำหนดให้ผู้ป่วยไว้แล้ว)
 export async function POST(req: Request) {
   try {
     const body = await req.json()
@@ -59,53 +65,52 @@ export async function POST(req: Request) {
 
     const durationSec = Math.round(Number(body.durationMin) * 60)
 
+    // ต้องมีโปรแกรมการฝึก (ACTIVE) ที่กำหนดให้ผู้ป่วยคนนี้ไว้แล้วก่อนเสมอ — เลือกได้จาก "คลังโปรแกรมฝึก"
+    // (ไม่สร้างโปรแกรมทั่วไปแบบไม่ระบุระยะให้อัตโนมัติอีกต่อไป เพื่อให้ทุกโปรแกรมเชื่อมกับระยะอาการที่ชัดเจน)
+    const [activePp] = await db
+      .select({ patient_program_id: patientPrograms.patient_program_id })
+      .from(patientPrograms)
+      .where(and(eq(patientPrograms.patient_id, body.patientId), eq(patientPrograms.status, 'ACTIVE')))
+      .orderBy(desc(patientPrograms.assigned_date))
+    if (!activePp) {
+      return NextResponse.json(
+        { error: 'ยังไม่ได้กำหนดโปรแกรมการฝึกให้ผู้ป่วยคนนี้ กรุณาเลือกโปรแกรมจากคลังโปรแกรมฝึกก่อนบันทึกผล' },
+        { status: 400, headers: cors }
+      )
+    }
+    const patientProgramId = activePp.patient_program_id
+
     const result = await db.transaction(async (tx) => {
-      // ใช้โปรแกรมที่นักกายภาพกำหนด (ACTIVE) ให้ผู้ป่วยคนนี้ไว้แล้วก่อน ถ้ามี
-      let [activePp] = await tx
-        .select({ patient_program_id: patientPrograms.patient_program_id })
-        .from(patientPrograms)
-        .where(and(eq(patientPrograms.patient_id, body.patientId), eq(patientPrograms.status, 'ACTIVE')))
-        .orderBy(desc(patientPrograms.assigned_date))
-      let patientProgramId = activePp?.patient_program_id
-
-      if (!patientProgramId) {
-        // ยังไม่เคยกำหนดโปรแกรมให้ผู้ป่วยคนนี้ — หา/สร้างโปรแกรมฝึกทั่วไปของนักกายภาพคนนี้แทน
-        let [program] = await tx
-          .select({ program_id: programs.program_id })
-          .from(programs)
-          .where(eq(programs.created_by, body.usersId))
-        let programId = program?.program_id
-        if (!programId) {
-          programId = `PRG${Date.now().toString().slice(-6)}`
-          await tx.insert(programs).values({
-            program_id: programId,
-            program_name: 'โปรแกรมฝึกทั่วไป',
-            repeat_count: 1,
-            program_type: 'CUSTOM',
-            session_per_day: 1,
-            created_by: body.usersId,
-            duration_sec: durationSec,
-          })
-        }
-
-        patientProgramId = `PP${Date.now().toString().slice(-6)}`
-        await tx.insert(patientPrograms).values({
-          patient_program_id: patientProgramId,
-          patient_id: body.patientId,
-          program_id: programId,
-          assigned_by: body.otId,
-        })
-      }
-
       const sessionId = `TS${Date.now().toString().slice(-6)}`
+      const sessionDate = body.sessionDate ? new Date(body.sessionDate) : new Date()
       await tx.insert(therapySessions).values({
         session_id: sessionId,
         patient_program_id: patientProgramId,
-        session_date: body.sessionDate ? new Date(body.sessionDate) : new Date(),
+        session_date: sessionDate,
         duration_sec: durationSec,
         total_reps: Number(body.totalReps),
         status: 'COMPLETED',
       })
+
+      // จำลองข้อมูลที่อุปกรณ์ IoT ของผู้ป่วยส่งเข้ามาระหว่างฝึก (ยังไม่มีอุปกรณ์จริงส่งข้อมูลเข้าระบบ)
+      // ใช้อุปกรณ์จากนัดหมายล่าสุดของผู้ป่วยที่มีการมอบหมายอุปกรณ์ไว้ ถ้ามี
+      const [deviceAppt] = await tx
+        .select({ device_id: appointments.device_id })
+        .from(appointments)
+        .where(and(eq(appointments.patient_id, body.patientId), isNotNull(appointments.device_id)))
+        .orderBy(desc(appointments.appointment_date))
+        .limit(1)
+
+      if (deviceAppt?.device_id) {
+        await tx.insert(movementData).values({
+          movement_id: `MV${Date.now().toString().slice(-6)}`,
+          session_id: sessionId,
+          device_id: deviceAppt.device_id,
+          movement_count: Number(body.totalReps),
+          movement_distance: (Number(body.totalReps) * 0.35).toFixed(2),
+          recorded_at: sessionDate,
+        })
+      }
 
       return { sessionId }
     })
