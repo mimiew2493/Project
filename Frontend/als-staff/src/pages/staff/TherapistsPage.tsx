@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import type { Therapist } from '../../types'
-import SearchBar from '../../components/SearchBar'
+import type { Therapist, AuthUser } from '../../types'
+import TopHeader from '../../components/dashboard/TopHeader'
 import { XIcon } from '../../components/Icon'
 import { API_BASE } from '../../config'
 
@@ -10,7 +10,9 @@ const Field = ({ label, req, children }: { label: string; req?: boolean; childre
   <div className="field"><label className="field-label">{label} {req && <span className="req">*</span>}</label>{children}</div>
 )
 
-export default function TherapistsPage() {
+interface Props { user: AuthUser }
+
+export default function TherapistsPage({ user }: Props) {
   const [therapists, setTherapists] = useState<Therapist[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -84,12 +86,19 @@ export default function TherapistsPage() {
   return (
     <>
       {toast && <div className="toast toast-success">{toast}</div>}
-      <div className="h-sec">
-        <div><h1 className="page-title">จัดการนักกิจกรรมบำบัด</h1><p className="page-sub">เพิ่ม แก้ไข และดูภาระงานของนักกิจกรรมบำบัดทั้งหมดในศูนย์</p></div>
-        <button className="btn btn-sm" onClick={() => (showForm ? closeForm() : openAddForm())}>
-          {showForm ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><XIcon size={13} /> ปิดฟอร์ม</span> : '+ เพิ่มนักกายภาพ'}
-        </button>
-      </div>
+      <TopHeader
+        title="จัดการนักกิจกรรมบำบัด"
+        breadcrumb={['หน้าแรก', 'จัดการนักกายภาพ']}
+        user={user}
+        search={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="ค้นหาด้วยชื่อ, เลขใบอนุญาต..."
+        action={{
+          label: showForm ? 'ปิดฟอร์ม' : 'เพิ่มนักกายภาพ',
+          icon: showForm ? <XIcon size={14} /> : undefined,
+          onClick: () => (showForm ? closeForm() : openAddForm()),
+        }}
+      />
 
       {showForm && (
         <div className="card" style={{ borderColor: 'var(--blue)' }}>
@@ -111,12 +120,11 @@ export default function TherapistsPage() {
 
       <div className="grid3">
         <div className="card"><div className="eyebrow">ทั้งหมด</div><div className="big">{total}<span className="big-unit">คน</span></div></div>
-        <div className="card" style={{ background: 'var(--green-t)', borderColor: '#d9e9d4' }}><div className="eyebrow">ปฏิบัติงาน</div><div className="big" style={{ color: 'var(--green)' }}>{total}<span className="big-unit">คน</span></div></div>
+        <div className="card" style={{ background: 'var(--green-t)', borderColor: '#8fdfc0' }}><div className="eyebrow">ปฏิบัติงาน</div><div className="big" style={{ color: 'var(--green)' }}>{total}<span className="big-unit">คน</span></div></div>
         <div className="card"><div className="eyebrow">เคสรวม</div><div className="big">{caseTotal}<span className="big-unit">เคส</span></div></div>
       </div>
 
-      <div className="toolbar">
-        <SearchBar value={search} onChange={setSearch} placeholder="ค้นหาด้วยชื่อ, เลขใบอนุญาต..." />
+      <div className="toolbar" style={{ justifyContent: 'flex-end' }}>
         <button className="btn btn-ghost btn-sm" onClick={() => alert('Export Excel...')}>↓ Export</button>
       </div>
 

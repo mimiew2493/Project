@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react'
-import type { Patient, PatientAppointment, Device, TherapySession, Program, PatientProgram, SessionFeedback, DiseaseStage } from '../../types'
-import SearchBar from '../../components/SearchBar'
+import type { Patient, PatientAppointment, Device, TherapySession, Program, PatientProgram, SessionFeedback, DiseaseStage, AuthUser } from '../../types'
 import SideBadge from '../../components/SideBadge'
-import SessionHistoryList from '../../components/SessionHistoryList'
+import TreatmentHistory from '../../components/TreatmentHistory'
+import TopHeader from '../../components/dashboard/TopHeader'
 import { ToolIcon, UserMdIcon, CalendarIcon, TrendingUpIcon } from '../../components/Icon'
 import { STAGE_LABEL, STAGE_PILL } from '../shared/ProgramLibraryPage'
 import { API_BASE } from '../../config'
 
-interface Props { otId: string; usersId: string }
+interface Props { otId: string; usersId: string; user: AuthUser }
 
 const patientName = (p: Patient) => `${p.first_name ?? ''} ${p.last_name ?? ''}`.trim() || p.patient_id
 
@@ -28,7 +28,7 @@ const APPT_STATUS_LABEL: Record<string, string> = {
   COMPLETED: 'เสร็จสิ้น', CANCELLED: 'ยกเลิก', NO_SHOW: 'ไม่มาตามนัด',
 }
 
-export default function MyCasesPage({ otId, usersId }: Props) {
+export default function MyCasesPage({ otId, usersId, user }: Props) {
   const [patients, setPatients] = useState<Patient[]>([])
   const [appointments, setAppointments] = useState<PatientAppointment[]>([])
   const [devices, setDevices] = useState<Device[]>([])
@@ -330,7 +330,6 @@ export default function MyCasesPage({ otId, usersId }: Props) {
                 </div>
               )}
 
-              <SessionHistoryList sessions={sessions} loading={sessionsLoading} />
               {!sessionsLoading && sessions.length === 0 && (
                 <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 6 }}>กด "+ บันทึกผลการฝึก" ด้านบนเพื่อเริ่มบันทึก หรือรอข้อมูลจากอุปกรณ์ IoT ในอนาคต</div>
               )}
@@ -338,7 +337,7 @@ export default function MyCasesPage({ otId, usersId }: Props) {
 
             <div className="card">
               <div className="h-sec">
-                <span className="h-sec-title">คำแนะนำที่ให้ผู้ป่วย</span>
+                <span className="h-sec-title">ให้คำแนะนำผู้ป่วย</span>
                 <button className="btn btn-sm" onClick={() => setShowFeedbackForm(v => !v)} disabled={sessions.length === 0}>
                   {showFeedbackForm ? 'ยกเลิก' : '+ ให้คำแนะนำ'}
                 </button>
@@ -346,7 +345,7 @@ export default function MyCasesPage({ otId, usersId }: Props) {
               {sessions.length === 0 && <div className="note">ต้องมีเซสชันการฝึกอย่างน้อย 1 ครั้งก่อนถึงจะให้คำแนะนำได้</div>}
 
               {showFeedbackForm && (
-                <div className="stack" style={{ marginBottom: 12 }}>
+                <div className="stack">
                   <div className="field">
                     <label className="field-label">อ้างอิงเซสชัน</label>
                     <select className="inp" value={feedbackSessionId} onChange={e => setFeedbackSessionId(e.target.value)}>
@@ -361,19 +360,11 @@ export default function MyCasesPage({ otId, usersId }: Props) {
                   <button className="btn btn-sm" onClick={saveFeedback} disabled={feedbackSaving}>{feedbackSaving ? 'กำลังบันทึก...' : 'ส่งคำแนะนำ'}</button>
                 </div>
               )}
+            </div>
 
-              {feedbackList.length === 0 ? (
-                <div className="note">ยังไม่เคยให้คำแนะนำผู้ป่วยคนนี้</div>
-              ) : (
-                <div className="stack">
-                  {feedbackList.map(f => (
-                    <div key={f.feedback_id} className="kv" style={{ display: 'block' }}>
-                      <div style={{ fontSize: 10.5, color: 'var(--muted)' }}>สำหรับเซสชันวันที่ {fmt(f.session_date)}</div>
-                      <div style={{ fontSize: 12.5, marginTop: 2 }}>{f.comment}</div>
-                    </div>
-                  ))}
-                </div>
-              )}
+            <div className="card">
+              <div className="h-sec"><span className="h-sec-title">ประวัติการรักษา</span></div>
+              <TreatmentHistory key={feedbackList.length + sessions.length} patientId={patient.patient_id} hideProgram />
             </div>
           </div>
 
@@ -530,16 +521,14 @@ export default function MyCasesPage({ otId, usersId }: Props) {
 
   return (
     <>
-      <div className="h-sec">
-        <div>
-          <h1 className="page-title">เคสของฉัน</h1>
-          <p className="page-sub">ผู้ป่วยที่มีนัดหมายกับคุณ — ดูข้อมูลเบื้องต้นและนัดล่าสุด</p>
-        </div>
-      </div>
-
-      <div className="toolbar">
-        <SearchBar value={search} onChange={setSearch} placeholder="ค้นหาด้วยชื่อ, รหัส, อาการ..." />
-      </div>
+      <TopHeader
+        title="เคสของฉัน"
+        breadcrumb={['หน้าแรก', 'เคสของฉัน']}
+        user={user}
+        search={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="ค้นหาด้วยชื่อ, รหัส, อาการ..."
+      />
 
       <div className="result-count">พบ {filtered.length} เคส</div>
 

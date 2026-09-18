@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
-import type { PatientAppointment } from '../../types'
+import type { PatientAppointment, AuthUser } from '../../types'
 import SideBadge from '../../components/SideBadge'
+import TopHeader from '../../components/dashboard/TopHeader'
 import { ToolIcon, CheckIcon, AlertTriangleIcon, CalendarIcon, XCircleIcon } from '../../components/Icon'
 import { API_BASE } from '../../config'
 
@@ -24,9 +25,9 @@ const toLocalYMD = (d: Date) =>
 
 const MONTH_DAY_LABELS = ['จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส', 'อา']
 
-interface Props { lockOtId?: string }
+interface Props { lockOtId?: string; user: AuthUser }
 
-export default function SchedulePage({ lockOtId }: Props) {
+export default function SchedulePage({ lockOtId, user }: Props) {
   const [filterOt, setFilterOt] = useState('all')
   const [weekOffset, setWeekOffset] = useState(0)
   const [viewMode, setViewMode] = useState<'week' | 'month'>('week')
@@ -112,31 +113,33 @@ export default function SchedulePage({ lockOtId }: Props) {
 
   return (
     <>
-      <div className="h-sec">
-        <div>
-          <h1 className="page-title">{lockOtId ? 'ตารางนัดตรวจเช็คอุปกรณ์ของฉัน' : 'ตารางนัดตรวจเช็คอุปกรณ์รวมของศูนย์'}</h1>
-          <p className="page-sub" style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
-            {lockOtId ? 'นัดตรวจเช็คอุปกรณ์ IoT ที่มอบหมายให้คุณ (ไม่ใช่นัดตรวจอาการ)' : 'นัดตรวจเช็คอุปกรณ์ IoT ของผู้ป่วยแต่ละคน — สร้างนัดใหม่ได้จากหน้าคลังอุปกรณ์'} · <ToolIcon size={12} /> = สถานะเครื่องกายภาพ
-          </p>
-        </div>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          {viewMode === 'week' ? (
-            <>
-              <button className="btn btn-ghost btn-sm" onClick={() => setWeekOffset(w => w - 1)}>← สัปดาห์ก่อน</button>
-              <span style={{ padding: '6px 12px', fontWeight: 600 }}>{weekLabel}</span>
-              <button className="btn btn-ghost btn-sm" onClick={() => setWeekOffset(w => w + 1)}>สัปดาห์ถัดไป →</button>
-              {weekOffset !== 0 && <button className="btn btn-ghost btn-sm" onClick={() => setWeekOffset(0)}>สัปดาห์นี้</button>}
-            </>
-          ) : (
-            <>
-              <button className="btn btn-ghost btn-sm" onClick={() => setMonthOffset(m => m - 1)}>← เดือนก่อน</button>
-              <span style={{ padding: '6px 12px', fontWeight: 600 }}>{monthLabel}</span>
-              <button className="btn btn-ghost btn-sm" onClick={() => setMonthOffset(m => m + 1)}>เดือนถัดไป →</button>
-              {monthOffset !== 0 && <button className="btn btn-ghost btn-sm" onClick={() => setMonthOffset(0)}>เดือนนี้</button>}
-            </>
-          )}
-        </div>
-      </div>
+      <TopHeader
+        title={lockOtId ? 'ตารางนัดตรวจเช็คอุปกรณ์ของฉัน' : 'ตารางนัดตรวจเช็คอุปกรณ์รวมของศูนย์'}
+        breadcrumb={['หน้าแรก', lockOtId ? 'ตารางนัดของฉัน' : 'ตารางนัดรวม']}
+        user={user}
+        right={
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {viewMode === 'week' ? (
+              <>
+                <button className="btn btn-ghost btn-sm" onClick={() => setWeekOffset(w => w - 1)}>← สัปดาห์ก่อน</button>
+                <span style={{ padding: '6px 12px', fontWeight: 600, fontSize: 12.5 }}>{weekLabel}</span>
+                <button className="btn btn-ghost btn-sm" onClick={() => setWeekOffset(w => w + 1)}>สัปดาห์ถัดไป →</button>
+                {weekOffset !== 0 && <button className="btn btn-ghost btn-sm" onClick={() => setWeekOffset(0)}>สัปดาห์นี้</button>}
+              </>
+            ) : (
+              <>
+                <button className="btn btn-ghost btn-sm" onClick={() => setMonthOffset(m => m - 1)}>← เดือนก่อน</button>
+                <span style={{ padding: '6px 12px', fontWeight: 600, fontSize: 12.5 }}>{monthLabel}</span>
+                <button className="btn btn-ghost btn-sm" onClick={() => setMonthOffset(m => m + 1)}>เดือนถัดไป →</button>
+                {monthOffset !== 0 && <button className="btn btn-ghost btn-sm" onClick={() => setMonthOffset(0)}>เดือนนี้</button>}
+              </>
+            )}
+          </div>
+        }
+      />
+      <p className="page-sub" style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap', marginTop: -10 }}>
+        {lockOtId ? 'นัดตรวจเช็คอุปกรณ์ IoT ที่มอบหมายให้คุณ (ไม่ใช่นัดตรวจอาการ)' : 'นัดตรวจเช็คอุปกรณ์ IoT ของผู้ป่วยแต่ละคน — สร้างนัดใหม่ได้จากหน้าคลังอุปกรณ์'} · <ToolIcon size={12} /> = สถานะเครื่องกายภาพ
+      </p>
 
       <div style={{ display: 'flex', gap: 6, marginBottom: 14 }}>
         <button className={`filter-pill ${viewMode === 'week' ? 'active' : ''}`} onClick={() => { setViewMode('week'); setSelectedDay(null) }}>รายสัปดาห์</button>

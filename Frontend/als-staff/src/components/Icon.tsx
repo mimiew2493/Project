@@ -38,3 +38,8 @@ export const WaveIcon = (p: Props) => <Base {...p}><path d="M18 11c0-1-.7-2-2-2s
 export const LogOutIcon = (p: Props) => <Base {...p}><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><path d="M16 17l5-5-5-5M21 12H9" /></Base>
 export const MessageIcon = (p: Props) => <Base {...p}><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2Z" /></Base>
 export const ClipboardListIcon = (p: Props) => <Base {...p}><rect x="8" y="2" width="8" height="4" rx="1" /><path d="M9 4H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-3" /><path d="M9 12h6M9 16h6M9 8h1" /></Base>
+export const IdCardIcon = (p: Props) => <Base {...p}><rect x="2" y="5" width="20" height="14" rx="2" /><circle cx="9" cy="11" r="2" /><path d="M6 16a3 3 0 0 1 6 0M14 9h6M14 13h4" /></Base>
+export const LockIcon = (p: Props) => <Base {...p}><rect x="4" y="11" width="16" height="10" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" /></Base>
+export const EyeIcon = (p: Props) => <Base {...p}><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" /><circle cx="12" cy="12" r="3" /></Base>
+export const EyeOffIcon = (p: Props) => <Base {...p}><path d="M9.9 4.24A9.6 9.6 0 0 1 12 4c6.5 0 10 7 10 7a17.6 17.6 0 0 1-2.16 3.19M6.6 6.6C3.9 8.3 2 11 2 11s3.5 7 10 7a9.6 9.6 0 0 0 4.24-.94M9.9 9.9a3 3 0 0 0 4.24 4.24" /><path d="M2 2l20 20" /></Base>
+export const LogInIcon = (p: Props) => <Base {...p}><path d="M14 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M15 12H3" /></Base>

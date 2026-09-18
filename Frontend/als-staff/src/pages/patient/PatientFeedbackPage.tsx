@@ -37,7 +37,7 @@ export default function PatientFeedbackPage({ patientId }: Props) {
       ) : (
         <div className="stack">
           {items.map(f => (
-            <div key={f.feedback_id} className="card" style={{ background: 'var(--blue-t)', borderColor: '#d5e2f7' }}>
+            <div key={f.feedback_id} className="card" style={{ background: 'var(--blue-t)', borderColor: '#9fd6cd' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
                 <b style={{ fontSize: 12.5 }}>{f.therapist_name ? `กภ. ${f.therapist_name} ${f.therapist_lastname ?? ''}` : 'นักกายภาพบำบัด'}</b>
                 <span style={{ fontSize: 10.5, color: 'var(--muted)' }}>{fmt(f.created_at)}</span>

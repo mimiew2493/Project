@@ -305,7 +305,7 @@ export default function RegisterPage({ step, setStep, onBack, resume }: Props) {
             </div>
           </div>
           <div className="stack">
-            <div className="card" style={{ background: 'var(--green-t)', borderColor: '#d9e9d4' }}>
+            <div className="card" style={{ background: 'var(--green-t)', borderColor: '#a8dcc0' }}>
               <div className="eyebrow">รหัสผู้ป่วย</div>
               <div className="mono" style={{ fontSize: 22, fontWeight: 700, color: 'var(--green)' }}>{ids?.patientId ?? 'ออกให้เมื่อบันทึก'}</div>
               <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>สร้างอัตโนมัติเมื่อบันทึก (เรียงลำดับ)</div>

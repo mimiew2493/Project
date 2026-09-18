@@ -1,5 +1,5 @@
 export type PageKey =
-  | 'queue' | 'register' | 'therapists' | 'devices' | 'schedule' | 'overview'
+  | 'queue' | 'register' | 'therapists' | 'staff' | 'devices' | 'schedule' | 'overview'
   | 'my-home' | 'my-cases' | 'my-schedule' | 'my-profile'
   | 'programs'
   | 'patient-home' | 'patient-appointments' | 'patient-stats' | 'patient-feedback' | 'patient-profile'
@@ -22,6 +22,11 @@ export interface Therapist {
   first_name: string; last_name: string; phone?: string; cases?: number
 }
 
+export interface Staff {
+  staff_id: string; users_id: string
+  first_name: string; last_name: string; phone?: string | null; email?: string | null
+}
+
 export interface Patient {
   patient_id: string; users_id: string; medical_condition?: string | null
   weight?: string | null; register_date?: string | null; address?: string | null
@@ -35,6 +40,11 @@ export interface Patient {
 
 export interface Device {
   device_id: string; device_name: string; serial_number: string; status: string
+  connection_status?: 'CONNECTED' | 'DISCONNECTED' | string
+  battery_level?: number | null
+  imu_status?: 'OK' | 'WARNING' | 'ERROR' | 'UNKNOWN' | string
+  encoder_status?: 'OK' | 'WARNING' | 'ERROR' | 'UNKNOWN' | string
+  last_seen_at?: string | null
   holder_patient_id?: string | null; holder_name?: string | null; issued_date?: string | null
 }
 

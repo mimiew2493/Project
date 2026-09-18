@@ -1,14 +1,23 @@
 import { useEffect, useState } from 'react'
-import type { Program, DiseaseStage } from '../../types'
+import type { Program, DiseaseStage, AuthUser } from '../../types'
+import TopHeader from '../../components/dashboard/TopHeader'
 import { ClipboardListIcon } from '../../components/Icon'
+import { Activity, Zap, TrendingUp, type LucideIcon } from 'lucide-react'
 import { API_BASE } from '../../config'
 
-interface Props { usersId: string; roleId: string }
+const STAGE_ICON: Record<DiseaseStage, LucideIcon> = { FLACCID: Activity, SPASTIC: Zap, RECOVERY: TrendingUp }
+const STAGE_TILE: Record<DiseaseStage, string> = {
+  FLACCID: 'bg-gradient-to-br from-[#ff8fa3] to-[#f0596c]',
+  SPASTIC: 'bg-gradient-to-br from-[#ffc978] to-[#e69a3e]',
+  RECOVERY: 'bg-gradient-to-br from-dash-green to-[#3fae7d]',
+}
+
+interface Props { user: AuthUser; usersId: string; roleId: string }
 
 export const STAGE_LABEL: Record<DiseaseStage, string> = {
-  FLACCID: 'ระยะแรก (Flaccid)',
-  SPASTIC: 'ระยะเกร็ง (Spastic)',
-  RECOVERY: 'ระยะฟื้นตัว (Recovery)',
+  FLACCID: 'ระยะแรก',
+  SPASTIC: 'ระยะเกร็ง',
+  RECOVERY: 'ระยะฟื้นตัว',
 }
 
 export const STAGE_PILL: Record<DiseaseStage, string> = {
@@ -30,7 +39,7 @@ const Field = ({ label, children }: { label: string; children: React.ReactNode }
   <div className="field"><label className="field-label">{label}</label>{children}</div>
 )
 
-export default function ProgramLibraryPage({ usersId, roleId }: Props) {
+export default function ProgramLibraryPage({ user, usersId, roleId }: Props) {
   const canCreate = roleId === 'R002'
   const [programs, setPrograms] = useState<Program[]>([])
   const [loading, setLoading] = useState(true)
@@ -124,15 +133,13 @@ export default function ProgramLibraryPage({ usersId, roleId }: Props) {
 
   return (
     <>
-      <div className="h-sec">
-        <div>
-          <h1 className="page-title">คลังโปรแกรมฝึก</h1>
-          <p className="page-sub">โปรแกรมของคุณและโปรแกรมกลาง จัดกลุ่มตามระยะอาการของโรคเพื่อเลือกให้เหมาะกับผู้ป่วยแต่ละคน</p>
-        </div>
-        {canCreate && (
-          <button className="btn btn-sm" onClick={() => (showForm ? closeForm() : openCreateForm())}>{showForm ? 'ยกเลิก' : '+ สร้างโปรแกรมใหม่'}</button>
-        )}
-      </div>
+      <TopHeader
+        title="คลังโปรแกรมฝึก"
+        breadcrumb={['หน้าแรก', 'คลังโปรแกรมฝึก']}
+        user={user}
+        action={canCreate ? { label: showForm ? 'ยกเลิก' : 'สร้างโปรแกรมใหม่', onClick: () => (showForm ? closeForm() : openCreateForm()) } : undefined}
+      />
+      <p className="page-sub" style={{ marginTop: -10 }}>โปรแกรมของคุณและโปรแกรมกลาง จัดกลุ่มตามระยะอาการของโรคเพื่อเลือกให้เหมาะกับผู้ป่วยแต่ละคน</p>
 
       {!canCreate && (
         <div className="note" style={{ marginBottom: 14 }}>การสร้าง แก้ไข และลบโปรแกรมเป็นสิทธิของนักกิจกรรมบำบัดเท่านั้น — หน้านี้แสดงเพื่อดูโปรแกรมที่มีอยู่สำหรับใช้ตอนลงทะเบียนผู้ป่วย</div>
@@ -192,30 +199,35 @@ export default function ProgramLibraryPage({ usersId, roleId }: Props) {
           <div className="empty-sub">กด "+ สร้างโปรแกรมใหม่" ด้านบนเพื่อเริ่มสร้างโปรแกรมสำหรับระยะอาการนี้</div>
         </div>
       ) : (
-        <div className="stack">
-          {filtered.map(p => (
-            <div className="patient-card" key={p.program_id}>
-              <div className="patient-top">
-                <div className="patient-identity">
-                  <div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3, flexWrap: 'wrap' }}>
-                      <span className="patient-name">{p.program_name}</span>
-                      {p.target_stage ? (
-                        <span className={`pill ${STAGE_PILL[p.target_stage]}`}>{STAGE_LABEL[p.target_stage]}</span>
-                      ) : (
-                        <span className="pill pill-blue">ทุกระยะ</span>
-                      )}
-                      {p.program_type === 'SYSTEM' && <span className="pill">โปรแกรมกลาง</span>}
-                      {p.status === 'INACTIVE' && <span className="pill pill-rose">ปิดใช้งาน</span>}
-                    </div>
-                    <div className="patient-meta">
-                      {p.repeat_count} ครั้ง/เซต · {p.session_per_day} เซต/วัน · {Math.round(p.duration_sec / 60)} นาที/ครั้ง
-                    </div>
-                    {p.description && <div className="patient-meta" style={{ marginTop: 4 }}>{p.description}</div>}
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          {filtered.map(p => {
+            const StageIcon = p.target_stage ? STAGE_ICON[p.target_stage] : ClipboardListIcon
+            const tileBg = p.target_stage ? STAGE_TILE[p.target_stage] : 'bg-gradient-to-br from-dash-primary to-dash-cyan'
+            return (
+              <div key={p.program_id} className="card" style={{ marginBottom: 0 }}>
+                <div className="flex items-start justify-between gap-2">
+                  <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-white ${tileBg}`}>
+                    <StageIcon size={20} />
+                  </div>
+                  <div className="flex flex-wrap justify-end gap-1">
+                    {p.program_type === 'SYSTEM' && <span className="pill">โปรแกรมกลาง</span>}
+                    {p.status === 'INACTIVE' && <span className="pill pill-rose">ปิดใช้งาน</span>}
                   </div>
                 </div>
+                <div className="mt-3 text-[13.5px] font-bold text-dash-text">{p.program_name}</div>
+                <div className="mt-1">
+                  {p.target_stage ? (
+                    <span className={`pill ${STAGE_PILL[p.target_stage]}`}>{STAGE_LABEL[p.target_stage]}</span>
+                  ) : (
+                    <span className="pill pill-blue">ทุกระยะ</span>
+                  )}
+                </div>
+                <div className="patient-meta mt-2">
+                  {p.repeat_count} ครั้ง/เซต · {p.session_per_day} เซต/วัน · {Math.round(p.duration_sec / 60)} นาที/ครั้ง
+                </div>
+                {p.description && <div className="patient-meta mt-1">{p.description}</div>}
                 {p.created_by === usersId && (
-                  <div className="patient-actions">
+                  <div className="patient-actions mt-3" style={{ flexWrap: 'wrap' }}>
                     <button className="btn btn-ghost btn-sm" disabled={busyId === p.program_id} onClick={() => startEdit(p)}>แก้ไข</button>
                     <button className="btn btn-ghost btn-sm" disabled={busyId === p.program_id} onClick={() => toggleStatus(p)}>
                       {p.status === 'ACTIVE' ? 'ปิดใช้งาน' : 'เปิดใช้งาน'}
@@ -224,8 +236,8 @@ export default function ProgramLibraryPage({ usersId, roleId }: Props) {
                   </div>
                 )}
               </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       )}
     </>

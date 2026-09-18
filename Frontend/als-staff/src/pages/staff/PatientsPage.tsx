@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react'
-import type { Patient, TherapySession, PatientAppointment } from '../../types'
+import type { Patient, PatientAppointment, AuthUser } from '../../types'
 import type { ResumeTarget } from '../../App'
-import SearchBar from '../../components/SearchBar'
 import Stepper from '../../components/Stepper'
 import SideBadge from '../../components/SideBadge'
-import SessionHistoryList from '../../components/SessionHistoryList'
+import TreatmentHistory from '../../components/TreatmentHistory'
+import TopHeader from '../../components/dashboard/TopHeader'
 import { XCircleIcon, ClipboardIcon, ClipboardListIcon, CheckIcon } from '../../components/Icon'
 import { API_BASE } from '../../config'
 
@@ -37,9 +37,9 @@ const Field = ({ label, children }: { label: string; children: React.ReactNode }
   <div className="field"><label className="field-label">{label}</label>{children}</div>
 )
 
-interface Props { onRegister: (target?: ResumeTarget & { step: number }) => void }
+interface Props { user: AuthUser; onRegister: (target?: ResumeTarget & { step: number }) => void }
 
-export default function PatientsPage({ onRegister }: Props) {
+export default function PatientsPage({ user, onRegister }: Props) {
   const [patients, setPatients] = useState<Patient[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -50,8 +50,6 @@ export default function PatientsPage({ onRegister }: Props) {
   const [saving, setSaving] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
   const [expandedHistoryId, setExpandedHistoryId] = useState<string | null>(null)
-  const [historyLoadingId, setHistoryLoadingId] = useState<string | null>(null)
-  const [historyCache, setHistoryCache] = useState<Record<string, TherapySession[]>>({})
   const [pendingAppts, setPendingAppts] = useState<PatientAppointment[]>([])
   const [confirmingId, setConfirmingId] = useState<string | null>(null)
 
@@ -123,17 +121,7 @@ export default function PatientsPage({ onRegister }: Props) {
     setSaving(false)
   }
 
-  const toggleHistory = (patientId: string) => {
-    if (expandedHistoryId === patientId) { setExpandedHistoryId(null); return }
-    setExpandedHistoryId(patientId)
-    if (historyCache[patientId]) return
-    setHistoryLoadingId(patientId)
-    fetch(`${API_BASE}/api/sessions?patient_id=${patientId}`)
-      .then(r => r.json())
-      .then(d => { if (Array.isArray(d)) setHistoryCache(prev => ({ ...prev, [patientId]: d })) })
-      .catch(() => {})
-      .finally(() => setHistoryLoadingId(null))
-  }
+  const toggleHistory = (patientId: string) => setExpandedHistoryId(prev => (prev === patientId ? null : patientId))
 
   const removePatient = async (p: Patient) => {
     if (!confirm(`ยืนยันลบผู้ป่วย ${patientName(p)} (${p.patient_id})? การลบไม่สามารถย้อนกลับได้`)) return
@@ -154,13 +142,15 @@ export default function PatientsPage({ onRegister }: Props) {
   return (
     <>
       {toast && <div className="toast toast-success">{toast}</div>}
-      <div className="h-sec">
-        <div>
-          <h1 className="page-title">ผู้ป่วยทั้งหมด</h1>
-          <p className="page-sub">รวมผู้ป่วยทุกสถานะ ทั้งที่ลงทะเบียนครบแล้วและที่ยังอยู่ระหว่างคิว</p>
-        </div>
-        <button className="btn btn-sm" onClick={() => onRegister()}>+ รับผู้ป่วยใหม่</button>
-      </div>
+      <TopHeader
+        title="ผู้ป่วยทั้งหมด"
+        breadcrumb={['หน้าแรก', 'คิวรับผู้ป่วย']}
+        user={user}
+        search={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="ค้นหาด้วยชื่อ, รหัสผู้ป่วย..."
+        action={{ label: 'รับผู้ป่วยใหม่', onClick: () => onRegister() }}
+      />
 
       {pendingAppts.length > 0 && (
         <div className="card" style={{ borderColor: 'var(--blue)' }}>
@@ -224,14 +214,13 @@ export default function PatientsPage({ onRegister }: Props) {
       )}
 
       <div className="toolbar">
-        <SearchBar value={search} onChange={setSearch} placeholder="ค้นหาด้วยชื่อ....." />
         <div className="filter-pills">
           {FILTER_OPTIONS.map(f => (
             <button key={f.key} className={`filter-pill ${filterSide === f.key ? 'active' : ''}`}
               onClick={() => setFilterSide(f.key)}>{f.label}</button>
           ))}
         </div>
-        <button className="btn btn-ghost btn-sm" onClick={() => alert('Export Excel...')}>↓ Export</button>
+        <button className="btn btn-ghost btn-sm" style={{ marginLeft: 'auto' }} onClick={() => alert('ส่งออกไฟล์ Excel...')}>↓ ส่งออก</button>
       </div>
 
       <div className="result-count">พบ {filtered.length} รายการ{search ? ` สำหรับ "${search}"` : ''}</div>
@@ -240,7 +229,7 @@ export default function PatientsPage({ onRegister }: Props) {
         <div className="empty-box">
           <div className="empty-icon"><ClipboardIcon size={48} /></div>
           <div className="empty-title">ไม่พบผู้ป่วยที่ตรงกับเงื่อนไข</div>
-          <div className="empty-sub">ลองเปลี่ยนคำค้นหาหรือ filter</div>
+          <div className="empty-sub">ลองเปลี่ยนคำค้นหาหรือตัวกรอง</div>
           <button className="btn btn-ghost btn-sm" style={{ marginTop: 12 }}
             onClick={() => { setSearch(''); setFilterSide('all') }}>ล้างตัวกรอง</button>
         </div>
@@ -279,7 +268,7 @@ export default function PatientsPage({ onRegister }: Props) {
                         </>
                       )}
                     <button className="btn btn-ghost btn-sm" onClick={() => toggleHistory(p.patient_id)}>
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><ClipboardListIcon size={12} /> ประวัติการฝึก</span>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><ClipboardListIcon size={12} /> ประวัติการรักษา</span>
                     </button>
                     <button className="btn btn-ghost btn-sm" onClick={() => startEdit(p)}>แก้ไข</button>
                     <button className="btn btn-ghost btn-sm" onClick={() => removePatient(p)}>ลบ</button>
@@ -288,8 +277,8 @@ export default function PatientsPage({ onRegister }: Props) {
                 {!completed && <Stepper current={p.registration_step ?? 1} />}
                 {expandedHistoryId === p.patient_id && (
                   <div className="card" style={{ marginTop: 12, background: 'var(--canvas)' }}>
-                    <div className="h-sec"><span className="h-sec-title">ประวัติการฝึกจากอุปกรณ์ IoT</span></div>
-                    <SessionHistoryList sessions={historyCache[p.patient_id] ?? []} loading={historyLoadingId === p.patient_id} />
+                    <div className="h-sec"><span className="h-sec-title">ประวัติการรักษา</span></div>
+                    <TreatmentHistory patientId={p.patient_id} />
                   </div>
                 )}
               </div>

@@ -47,6 +47,11 @@ export async function GET() {
         device_name: d.device_name,
         serial_number: d.serial_number,
         status: d.status,
+        connection_status: d.connection_status,
+        battery_level: d.battery_level,
+        imu_status: d.imu_status,
+        encoder_status: d.encoder_status,
+        last_seen_at: d.last_seen_at,
         holder_patient_id: holder?.patient_id ?? null,
         holder_name: holder ? `${holder.first_name ?? ''} ${holder.last_name ?? ''}`.trim() : null,
         issued_date: holder?.appointment_date ?? null,
@@ -93,6 +98,10 @@ export async function PATCH(req: Request) {
     if (body.deviceName !== undefined) patch.device_name = body.deviceName
     if (body.serialNumber !== undefined) patch.serial_number = body.serialNumber
     if (body.status !== undefined) patch.status = body.status
+    if (body.connectionStatus !== undefined) patch.connection_status = body.connectionStatus
+    if (body.batteryLevel !== undefined) patch.battery_level = body.batteryLevel
+    if (body.imuStatus !== undefined) patch.imu_status = body.imuStatus
+    if (body.encoderStatus !== undefined) patch.encoder_status = body.encoderStatus
 
     if (Object.keys(patch).length === 0) {
       return NextResponse.json({ error: 'ไม่มีข้อมูลที่จะแก้ไข' }, { status: 400, headers: cors })

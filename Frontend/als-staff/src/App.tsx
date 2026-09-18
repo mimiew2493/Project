@@ -7,6 +7,7 @@ import SchedulePage from './pages/shared/SchedulePage'
 import PatientsPage from './pages/staff/PatientsPage'
 import RegisterPage from './pages/staff/RegisterPage'
 import TherapistsPage from './pages/staff/TherapistsPage'
+// import StaffPage from './pages/staff/StaffPage' // ปิดใช้งานชั่วคราว
 import DevicesPage from './pages/staff/DevicesPage'
 import OverviewPage from './pages/staff/OverviewPage'
 import TherapistHomePage from './pages/therapist/HomePage'
@@ -23,7 +24,7 @@ export interface ResumeTarget { patientId: string; usersId: string }
 
 interface Session { token: string; user: AuthUser }
 
-const STAFF_PAGES: PageKey[] = ['queue', 'register', 'therapists', 'devices', 'schedule', 'overview', 'programs']
+const STAFF_PAGES: PageKey[] = ['overview', 'queue', 'register', 'therapists', 'devices', 'schedule', 'programs'] // 'staff' ปิดใช้งานชั่วคราว
 const THERAPIST_PAGES: PageKey[] = ['my-home', 'my-cases', 'my-schedule', 'programs', 'my-profile']
 const PATIENT_PAGES: PageKey[] = ['patient-home', 'patient-appointments', 'patient-stats', 'patient-feedback', 'patient-profile']
 
@@ -43,7 +44,7 @@ export default function App() {
     const s = { token, user }
     localStorage.setItem('als-session', JSON.stringify(s))
     setSession(s)
-    setPage(user.role_id === 'R002' ? 'my-home' : user.role_id === 'R001' ? 'patient-home' : 'queue')
+    setPage(user.role_id === 'R002' ? 'my-home' : user.role_id === 'R001' ? 'patient-home' : 'overview')
   }
 
   const handleLogout = () => {
@@ -69,16 +70,18 @@ export default function App() {
   if (isPatient) {
     const patientId = session.user.patient_id ?? ''
     return (
-      <div className="patient-shell">
-        <div className="patient-topbar">
+      <div className="mx-auto flex h-screen max-w-[480px] flex-col border-x border-[#cfe4e0] bg-dash-bg">
+        <div className="flex shrink-0 items-center justify-between border-b border-[#cfe4e0] bg-white/90 px-4 py-3.5 backdrop-blur-sm">
           <div>
-            <h1>ALS Rehab</h1>
-            <p>ระบบติดตามการฝึกและนัดหมาย</p>
+            <h1 className="text-[15px] font-bold text-dash-primary">ALS Rehab</h1>
+            <p className="text-[10.5px] text-dash-text-soft">ระบบติดตามการฝึกและนัดหมาย</p>
           </div>
-          <button className="btn btn-ghost btn-sm" onClick={handleLogout}>ออกจากระบบ</button>
+          <button onClick={handleLogout} className="rounded-lg border border-[#cfe4e0] bg-white px-3 py-1.5 text-[11px] font-semibold text-dash-text-soft hover:text-dash-primary">
+            ออกจากระบบ
+          </button>
         </div>
-        <div className="patient-content">
-          {effectivePage === 'patient-home'         && <PatientHomePage patientId={patientId} />}
+        <div className="flex-1 overflow-y-auto p-4">
+          {effectivePage === 'patient-home'         && <PatientHomePage patientId={patientId} onNavigate={goto} />}
           {effectivePage === 'patient-appointments' && <PatientAppointmentsPage patientId={patientId} />}
           {effectivePage === 'patient-stats'        && <PatientStatsPage patientId={patientId} />}
           {effectivePage === 'patient-feedback'     && <PatientFeedbackPage patientId={patientId} />}
@@ -93,22 +96,19 @@ export default function App() {
     <div className="app-shell">
       <Sidebar page={effectivePage} onNavigate={goto} user={session.user} onLogout={handleLogout} />
       <div className="main-area">
-        <div className="topbar">
-          <span>als-rehab.psu.ac.th/records</span>
-          <div className="topbar-right"><span className="online-dot" /> ระบบพร้อมใช้งาน</div>
-        </div>
         <div className="content-area">
-          {!isTherapist && effectivePage === 'queue'      && <PatientsPage   onRegister={openRegister} />}
+          {!isTherapist && effectivePage === 'queue'      && <PatientsPage   user={session.user} onRegister={openRegister} />}
           {!isTherapist && effectivePage === 'register'   && <RegisterPage    step={regStep} setStep={setRegStep} resume={resume} onBack={() => goto('queue')} />}
-          {!isTherapist && effectivePage === 'therapists' && <TherapistsPage />}
-          {!isTherapist && effectivePage === 'devices'    && <DevicesPage />}
-          {!isTherapist && effectivePage === 'schedule'   && <SchedulePage />}
-          {!isTherapist && effectivePage === 'overview'   && <OverviewPage />}
-          {!isTherapist && effectivePage === 'programs'   && <ProgramLibraryPage usersId={session.user.users_id} roleId={session.user.role_id} />}
-          {isTherapist && effectivePage === 'my-home'     && <TherapistHomePage otId={session.user.ot_id ?? ''} firstName={session.user.first_name} />}
-          {isTherapist && effectivePage === 'my-cases'    && <MyCasesPage otId={session.user.ot_id ?? ''} usersId={session.user.users_id} />}
-          {isTherapist && effectivePage === 'my-schedule' && <SchedulePage lockOtId={session.user.ot_id ?? undefined} />}
-          {isTherapist && effectivePage === 'programs'    && <ProgramLibraryPage usersId={session.user.users_id} roleId={session.user.role_id} />}
+          {!isTherapist && effectivePage === 'therapists' && <TherapistsPage user={session.user} />}
+          {/* {!isTherapist && effectivePage === 'staff' && <StaffPage />} ปิดใช้งานชั่วคราว */}
+          {!isTherapist && effectivePage === 'devices'    && <DevicesPage user={session.user} />}
+          {!isTherapist && effectivePage === 'schedule'   && <SchedulePage user={session.user} />}
+          {!isTherapist && effectivePage === 'overview'   && <OverviewPage user={session.user} onGoto={goto} />}
+          {!isTherapist && effectivePage === 'programs'   && <ProgramLibraryPage user={session.user} usersId={session.user.users_id} roleId={session.user.role_id} />}
+          {isTherapist && effectivePage === 'my-home'     && <TherapistHomePage otId={session.user.ot_id ?? ''} firstName={session.user.first_name} user={session.user} onOpenCases={() => goto('my-cases')} />}
+          {isTherapist && effectivePage === 'my-cases'    && <MyCasesPage otId={session.user.ot_id ?? ''} usersId={session.user.users_id} user={session.user} />}
+          {isTherapist && effectivePage === 'my-schedule' && <SchedulePage lockOtId={session.user.ot_id ?? undefined} user={session.user} />}
+          {isTherapist && effectivePage === 'programs'    && <ProgramLibraryPage user={session.user} usersId={session.user.users_id} roleId={session.user.role_id} />}
           {isTherapist && effectivePage === 'my-profile'  && <ProfilePage user={session.user} onLogout={handleLogout} />}
         </div>
       </div>

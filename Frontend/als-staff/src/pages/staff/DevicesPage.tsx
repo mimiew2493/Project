@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import type { Device, Therapist } from '../../types'
-import SearchBar from '../../components/SearchBar'
+import type { Device, Therapist, AuthUser } from '../../types'
+import TopHeader from '../../components/dashboard/TopHeader'
 import { XIcon, CalendarIcon } from '../../components/Icon'
 import { API_BASE } from '../../config'
 
@@ -26,7 +26,9 @@ const Field = ({ label, req, children }: { label: string; req?: boolean; childre
 
 const fmtDate = (iso: string) => new Date(iso).toLocaleDateString('th-TH', { dateStyle: 'medium' })
 
-export default function DevicesPage() {
+interface Props { user: AuthUser }
+
+export default function DevicesPage({ user }: Props) {
   const [devices, setDevices] = useState<Device[]>([])
   const [therapists, setTherapists] = useState<Therapist[]>([])
   const [loading, setLoading] = useState(true)
@@ -128,12 +130,19 @@ export default function DevicesPage() {
   return (
     <>
       {toast && <div className="toast toast-success">{toast}</div>}
-      <div className="h-sec">
-        <div><h1 className="page-title">คลังอุปกรณ์ IoT</h1><p className="page-sub">อุปกรณ์เป็นทรัพย์สินของศูนย์ที่ต้องยืม–คืน–ซ่อม และนัดตรวจเช็คเป็นระยะ ต้องรู้ว่าเครื่องไหนอยู่กับใคร</p></div>
-        <button className="btn btn-sm" onClick={() => (showForm ? closeForm() : openAddForm())}>
-          {showForm ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><XIcon size={13} /> ปิดฟอร์ม</span> : '+ เพิ่มอุปกรณ์'}
-        </button>
-      </div>
+      <TopHeader
+        title="คลังอุปกรณ์ IoT"
+        breadcrumb={['หน้าแรก', 'คลังอุปกรณ์']}
+        user={user}
+        search={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="ค้นหารหัสอุปกรณ์, ชื่อผู้ถือครอง..."
+        action={{
+          label: showForm ? 'ปิดฟอร์ม' : 'เพิ่มอุปกรณ์',
+          icon: showForm ? <XIcon size={14} /> : undefined,
+          onClick: () => (showForm ? closeForm() : openAddForm()),
+        }}
+      />
 
       {showForm && (
         <div className="card" style={{ borderColor: 'var(--blue)' }}>
@@ -157,16 +166,15 @@ export default function DevicesPage() {
 
       <div className="grid3">
         <div className="card"><div className="eyebrow">ทั้งหมด</div><div className="big">{total}<span className="big-unit">เครื่อง</span></div></div>
-        <div className="card" style={{ background: 'var(--blue-t)', borderColor: '#d5e2f7' }}><div className="eyebrow" style={{ color: 'var(--blue)' }}>พร้อมจ่าย</div><div className="big" style={{ color: 'var(--blue)' }}>{available}<span className="big-unit">เครื่อง</span></div></div>
-        <div className="card" style={{ background: 'var(--amber-t)', borderColor: '#f0dfc0' }}><div className="eyebrow" style={{ color: 'var(--amber)' }}>ส่งซ่อม</div><div className="big" style={{ color: 'var(--amber)' }}>{maintenance}<span className="big-unit">เครื่อง</span></div></div>
+        <div className="card" style={{ background: 'var(--blue-t)', borderColor: '#9fd6cd' }}><div className="eyebrow" style={{ color: 'var(--blue)' }}>พร้อมจ่าย</div><div className="big" style={{ color: 'var(--blue)' }}>{available}<span className="big-unit">เครื่อง</span></div></div>
+        <div className="card" style={{ background: 'var(--amber-t)', borderColor: '#f0c988' }}><div className="eyebrow" style={{ color: 'var(--amber)' }}>ส่งซ่อม</div><div className="big" style={{ color: 'var(--amber)' }}>{maintenance}<span className="big-unit">เครื่อง</span></div></div>
       </div>
 
       <div className="toolbar">
-        <SearchBar value={search} onChange={setSearch} placeholder="ค้นหารหัสอุปกรณ์, ชื่อผู้ถือครอง..." />
         <div className="filter-pills">
           {FILTERS.map(f => <button key={f.key} className={`filter-pill ${filter === f.key ? 'active' : ''}`} onClick={() => setFilter(f.key)}>{f.label}</button>)}
         </div>
-        <button className="btn btn-ghost btn-sm" onClick={() => alert('Export Excel...')}>↓ Export</button>
+        <button className="btn btn-ghost btn-sm" style={{ marginLeft: 'auto' }} onClick={() => alert('ส่งออกไฟล์ Excel...')}>↓ ส่งออก</button>
       </div>
 
       <div className="card-0">
