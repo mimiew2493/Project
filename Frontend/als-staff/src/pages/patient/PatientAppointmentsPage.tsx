@@ -1,12 +1,19 @@
 import { useEffect, useState } from 'react'
 import type { PatientAppointment } from '../../types'
-import SideBadge from '../../components/SideBadge'
-import { CalendarIcon, ToolIcon } from '../../components/Icon'
+import { Wrench } from 'lucide-react'
 import { API_BASE } from '../../config'
 
 interface Props { patientId: string }
 
 const fmt = (iso: string) => new Date(iso).toLocaleString('th-TH', { dateStyle: 'medium', timeStyle: 'short' })
+
+const STATUS: Record<string, { label: string; cls: string }> = {
+  SCHEDULED: { label: 'ยืนยันแล้ว', cls: 'bg-[#E6F7EF] text-[#1E9E6B]' },
+  PROPOSED: { label: 'รอยืนยัน', cls: 'bg-[#FFF3DC] text-[#C9820E]' },
+  COMPLETED: { label: 'เสร็จสิ้น', cls: 'bg-[#EFEDF7] text-[#62677D]' },
+  CANCELLED: { label: 'ยกเลิก', cls: 'bg-[#FBE9EE] text-[#C43D5C]' },
+  NO_SHOW: { label: 'ไม่มาตามนัด', cls: 'bg-[#FBE9EE] text-[#C43D5C]' },
+}
 
 export default function PatientAppointmentsPage({ patientId }: Props) {
   const [appts, setAppts] = useState<PatientAppointment[]>([])
@@ -20,44 +27,47 @@ export default function PatientAppointmentsPage({ patientId }: Props) {
       .finally(() => setLoading(false))
   }, [patientId])
 
-  if (loading) return <div className="loading-box">กำลังโหลด...</div>
+  if (loading) return <div className="py-16 text-center text-[12px] text-[#82869C]">กำลังโหลด...</div>
 
   const sorted = [...appts].sort((a, b) => b.appointment_date.localeCompare(a.appointment_date))
 
   return (
-    <>
-      <div style={{ marginBottom: 14 }}>
-        <h1 style={{ fontSize: 17, fontWeight: 700 }}>นัดหมายของฉัน</h1>
-        <p style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 2 }}>ประวัตินัดหมายทั้งหมด {sorted.length} ครั้ง</p>
+    <div className="space-y-3">
+      <div className="px-0.5">
+        <h1 className="text-[15px] font-extrabold text-[#1B1E2C]">นัดหมายของฉัน</h1>
+        <p className="mt-[3px] text-[11px] text-[#82869C]">ประวัตินัดหมายทั้งหมด {sorted.length} ครั้ง</p>
       </div>
 
       {sorted.length === 0 ? (
-        <div className="empty-box">
-          <div className="empty-icon"><CalendarIcon size={48} /></div>
-          <div className="empty-title">ยังไม่มีนัดหมาย</div>
-        </div>
+        <div className="pg-card px-5 py-10 text-center text-[13px] font-bold text-[#1B1E2C]">ยังไม่มีนัดหมาย</div>
       ) : (
-        <div className="stack">
-          {sorted.map(a => (
-            <div key={a.appointment_id} className="card">
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        sorted.map(a => {
+          const st = STATUS[a.status] ?? { label: a.status, cls: 'bg-[#EFEDF7] text-[#62677D]' }
+          const side = a.treated_side ?? a.affected_side
+          return (
+            <div key={a.appointment_id} className="pg-card p-4">
+              <div className="flex items-start justify-between gap-2">
                 <div>
-                  <b style={{ fontSize: 13 }}>{fmt(a.appointment_date)}</b>
-                  <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 3 }}>
-                    {a.therapist_name ? `กภ. ${a.therapist_name}` : 'ยังไม่มอบหมายนักกายภาพ'} · {a.duration_min} นาที
+                  <div className="font-mono text-[13px] font-bold text-[#1B1E2C]">{fmt(a.appointment_date)}</div>
+                  <div className="mt-1 text-[11px] leading-relaxed text-[#82869C]">
+                    {a.therapist_name ? `กภ.${a.therapist_name}` : 'ยังไม่มอบหมายนักกายภาพ'} · {a.duration_min} นาที
                   </div>
                 </div>
-                <span className={`pill ${a.status === 'SCHEDULED' ? 'pill-amber' : a.status === 'COMPLETED' ? 'pill-green' : ''}`}>{a.status}</span>
+                <span className={`shrink-0 rounded-full px-2.5 py-[3px] text-[10.5px] font-bold ${st.cls}`}>{st.label}</span>
               </div>
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 8 }}>
-                <SideBadge side={a.treated_side ?? a.affected_side} />
-                {a.device_id && <span style={{ fontSize: 10.5, color: 'var(--muted)', display: 'inline-flex', alignItems: 'center', gap: 3 }}><ToolIcon size={11} /> {a.device_id}</span>}
-              </div>
-              {a.note && <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 6 }}>{a.note}</div>}
+              {(side || a.device_id) && (
+                <div className="mt-2 flex items-center gap-2">
+                  {side && <span className="rounded-full bg-[#F1ECFC] px-2 py-[3px] text-[9.5px] font-bold text-[#7350C7]">{side}</span>}
+                  {a.device_id && (
+                    <span className="inline-flex items-center gap-1 text-[10.5px] text-[#82869C]"><Wrench size={11} /> {a.device_id}</span>
+                  )}
+                </div>
+              )}
+              {a.note && <div className="mt-1.5 text-[11px] text-[#82869C]">{a.note}</div>}
             </div>
-          ))}
-        </div>
+          )
+        })
       )}
-    </>
+    </div>
   )
 }

@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
 import type { SessionFeedback } from '../../types'
-import { MessageIcon } from '../../components/Icon'
 import { API_BASE } from '../../config'
 
 interface Props { patientId: string }
@@ -19,35 +18,32 @@ export default function PatientFeedbackPage({ patientId }: Props) {
       .finally(() => setLoading(false))
   }, [patientId])
 
-  if (loading) return <div className="loading-box">กำลังโหลด...</div>
+  if (loading) return <div className="py-16 text-center text-[12px] text-[#82869C]">กำลังโหลด...</div>
 
   return (
-    <>
-      <div style={{ marginBottom: 14 }}>
-        <h1 style={{ fontSize: 17, fontWeight: 700 }}>คำแนะนำจากนักกายภาพ</h1>
-        <p style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 2 }}>ข้อเสนอแนะเกี่ยวกับการฝึกของคุณ</p>
+    <div className="space-y-3">
+      <div className="px-0.5">
+        <h1 className="text-[15px] font-extrabold text-[#1B1E2C]">คำแนะนำจากนักกายภาพ</h1>
+        <p className="mt-[3px] text-[11px] text-[#82869C]">ข้อเสนอแนะเกี่ยวกับการฝึกของคุณ</p>
       </div>
 
       {items.length === 0 ? (
-        <div className="empty-box">
-          <div className="empty-icon"><MessageIcon size={48} /></div>
-          <div className="empty-title">ยังไม่มีคำแนะนำ</div>
-          <div className="empty-sub">คำแนะนำจากนักกายภาพบำบัดของคุณจะปรากฏที่นี่</div>
+        <div className="pg-card px-5 py-10 text-center">
+          <div className="text-[13px] font-bold text-[#1B1E2C]">ยังไม่มีคำแนะนำ</div>
+          <div className="mt-1 text-[11.5px] text-[#82869C]">คำแนะนำจากนักกายภาพบำบัดของคุณจะปรากฏที่นี่</div>
         </div>
       ) : (
-        <div className="stack">
-          {items.map(f => (
-            <div key={f.feedback_id} className="card" style={{ background: 'var(--blue-t)', borderColor: '#9fd6cd' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                <b style={{ fontSize: 12.5 }}>{f.therapist_name ? `กภ. ${f.therapist_name} ${f.therapist_lastname ?? ''}` : 'นักกายภาพบำบัด'}</b>
-                <span style={{ fontSize: 10.5, color: 'var(--muted)' }}>{fmt(f.created_at)}</span>
-              </div>
-              <div style={{ fontSize: 13, lineHeight: 1.6 }}>{f.comment}</div>
-              <div style={{ fontSize: 10.5, color: 'var(--muted)', marginTop: 6 }}>สำหรับเซสชันวันที่ {fmt(f.session_date)}</div>
+        items.map(f => (
+          <div key={f.feedback_id} className="pg-card p-4">
+            <div className="mb-1.5 flex items-center justify-between gap-2 text-[11px] text-[#82869C]">
+              <span className="font-bold text-[#1B1E2C]">{f.therapist_name ? `กภ.${f.therapist_name} ${f.therapist_lastname ?? ''}` : 'นักกายภาพบำบัด'}</span>
+              <span>{fmt(f.created_at)}</span>
             </div>
-          ))}
-        </div>
+            <div className="text-[12.5px] leading-relaxed text-[#1B1E2C]">{f.comment}</div>
+            <div className="mt-2 text-[10.5px] text-[#82869C]">สำหรับเซสชันวันที่ {fmt(f.session_date)}</div>
+          </div>
+        ))
       )}
-    </>
+    </div>
   )
 }

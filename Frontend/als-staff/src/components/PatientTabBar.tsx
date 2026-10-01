@@ -14,14 +14,14 @@ interface Props { page: PageKey; onNavigate: (p: PageKey) => void }
 
 export default function PatientTabBar({ page, onNavigate }: Props) {
   return (
-    <nav className="flex shrink-0 border-t border-[#cfe4e0] bg-white/90 pb-[env(safe-area-inset-bottom,0)] backdrop-blur-sm">
+    <nav className="flex shrink-0 border-t border-[#1B1E2C]/[.07] bg-white/75 pb-[env(safe-area-inset-bottom,0)] backdrop-blur-md">
       {TABS.map(t => {
         const active = page === t.key
         return (
           <button
             key={t.key}
             onClick={() => onNavigate(t.key)}
-            className={`flex flex-1 flex-col items-center gap-1 py-2.5 text-[10.5px] transition-colors ${active ? 'font-semibold text-dash-primary' : 'text-dash-text-soft'}`}
+            className={`flex flex-1 flex-col items-center gap-1 py-2.5 text-[10.5px] transition-colors ${active ? 'font-bold text-[#E5533A]' : 'text-[#82869C]'}`}
           >
             <t.icon size={19} strokeWidth={active ? 2.4 : 2} />
             {t.label}

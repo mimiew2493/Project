@@ -70,13 +70,13 @@ export default function App() {
   if (isPatient) {
     const patientId = session.user.patient_id ?? ''
     return (
-      <div className="mx-auto flex h-screen max-w-[480px] flex-col border-x border-[#cfe4e0] bg-dash-bg">
-        <div className="flex shrink-0 items-center justify-between border-b border-[#cfe4e0] bg-white/90 px-4 py-3.5 backdrop-blur-sm">
+      <div className="pg-shell mx-auto flex h-screen max-w-[480px] flex-col border-x border-[#E4E1F0]">
+        <div className="flex shrink-0 items-center justify-between border-b border-[#1B1E2C]/[.06] bg-white/70 px-4 py-3.5 backdrop-blur-md">
           <div>
-            <h1 className="text-[15px] font-bold text-dash-primary">ALS Rehab</h1>
-            <p className="text-[10.5px] text-dash-text-soft">ระบบติดตามการฝึกและนัดหมาย</p>
+            <h1 className="text-[15px] font-extrabold text-[#1B1E2C]">ALS Rehab</h1>
+            <p className="text-[10.5px] text-[#82869C]">ระบบติดตามการฝึกและนัดหมาย</p>
           </div>
-          <button onClick={handleLogout} className="rounded-lg border border-[#cfe4e0] bg-white px-3 py-1.5 text-[11px] font-semibold text-dash-text-soft hover:text-dash-primary">
+          <button onClick={handleLogout} className="rounded-xl border border-white/80 bg-white/60 px-3 py-1.5 text-[11px] font-bold text-[#62677D] hover:text-[#E5533A]">
             ออกจากระบบ
           </button>
         </div>
