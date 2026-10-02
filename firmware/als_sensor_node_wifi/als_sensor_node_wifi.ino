@@ -1,29 +1,34 @@
 /*
-  ALS Rehab Sensor Node — WiFi/HTTP variant (ESP32 / ESP8266)
+  ALS Rehab Sensor Node — WiFi/HTTP variant (ESP32)
 
-  Pulls the patient's active training program straight from the web app's
-  API, runs the MPU6050 + Pmod ISNS20 sensing loop against those parameters,
-  and posts the result back — no PC bridge script needed.
+  Talks to the web app directly over WiFi — no PC bridge script needed.
+  The device only needs its own DEVICE_ID; the backend works out which
+  patient holds it (from the SCHEDULED appointment the device is attached to)
+  and which program targets apply.
 
-  Flow:
-    1. Poll GET /api/patient-programs?patient_id=<PATIENT_ID> until an
-       ACTIVE program is found -> read repeat_count (target reps) and
-       duration_sec (target duration).
-    2. Run the session: count reps from MPU6050, watch current from
-       Pmod ISNS20 for over-current cutoff.
-    3. POST /api/sessions with { patientId, otId, usersId, durationMin, totalReps }.
+  Flow (everything goes through POST /api/devices/telemetry):
+    1. Idle: send a heartbeat every IDLE_REPORT_MS with battery/voltage/current.
+       The reply carries any command the patient app left for this device.
+    2. Reply command "START" (patient pressed "เริ่มเซต" in the app):
+       start a session using the reply's targetReps / durationSec.
+    3. Running: send { state: "RUNNING", reps } every RUN_REPORT_MS so the
+       patient screen counts live. A "STOP" command ends the set early.
+    4. Set ends (target reps, target time, STOP or over-current):
+       send { state: "DONE", totalReps, durationSec, distanceCm } and the
+       backend records the therapy session for the patient.
 
-  Requires the "ArduinoJson" library (Library Manager -> search "ArduinoJson"
-  by Benoit Blanchon, v6.x). Board: ESP32 (WiFi.h + HTTPClient.h from the
-  ESP32 core) — for ESP8266 swap WiFi.h/HTTPClient.h for ESP8266WiFi.h/
-  ESP8266HTTPClient.h and add a WiFiClient to http.begin().
+  Requires the "ArduinoJson" library v7 (Library Manager -> "ArduinoJson" by
+  Benoit Blanchon). Board: ESP32 (WiFi.h + HTTPClient.h from the ESP32 core).
 
-  Wiring — same as als_sensor_node.ino:
-    MPU6050:  SDA/SCL -> board's I2C pins, AD0 -> GND (address 0x68)
-    Pmod ISNS20: ISEN (pin1) -> an ADC-capable pin (ISNS_PIN), VCC 3.3V, GND
-
-  Config below (WiFi, backend URL, patient/ot/user IDs) is per physical unit
-  — set it to match whichever patient this device is currently assigned to.
+  Wiring
+  ------
+    MPU6050:     SDA/SCL -> board's I2C pins, AD0 -> GND (address 0x68)
+    Pmod ISNS20: put it IN SERIES between the power supply and the motor/load.
+                 ISEN (pin1) -> ISNS_PIN, VCC 3.3V, GND
+    Battery:     battery+ -> R1 -> BATTERY_PIN -> R2 -> GND (voltage divider,
+                 keep the pin below 3.3V). Set BATTERY_PIN = -1 if not wired.
+    ALL GROUNDS (power supply, ESP32, sensors) MUST BE CONNECTED TOGETHER.
+    Use ADC1 pins only (GPIO 32-39): ADC2 pins stop working while WiFi is on.
 */
 
 #include <Wire.h>
@@ -34,24 +39,30 @@
 // ---------- Config: fill in per device ----------
 const char* WIFI_SSID = "YOUR_WIFI_SSID";
 const char* WIFI_PASSWORD = "YOUR_WIFI_PASSWORD";
-const char* API_BASE_URL = "http://YOUR_BACKEND_HOST";  // e.g. your Vercel deployment or LAN IP:3000
-
-const char* PATIENT_ID = "PAT000001";
-const char* OT_ID = "OT000001";
-const char* USERS_ID = "USR000001";  // therapist/user recording the session
+// NOTb localhost — that would be the ESP32 itself. Use the PC's LAN IP
+// (e.g. "http://192.168.1.10:3000") or the deployed backend URL, no trailing slash.
+const char* API_BASE_URL = "http://192.168.1.10:3000";
+const char* DEVICE_ID = "DEV000001";  // must match a device in the web app's device inventory
 
 // ---------- MPU6050 ----------
 const uint8_t MPU_ADDR = 0x68;
 int16_t ax, ay, az, gx, gy, gz;
 float gyroBiasZ = 0;
+bool imuOk = false;
 
 // ---------- Pmod ISNS20 ----------
-const int ISNS_PIN = 34;               // pick an ADC-capable pin on your board
+const int ISNS_PIN = 34;               // ADC1 pin
 const float ADC_VREF = 3.3;
 const int ADC_RES = 4095;              // 12-bit ADC on ESP32
 const float ISNS_OFFSET_V = 1.65;      // verify against datasheet for your board rev
 const float ISNS_SENSITIVITY = 0.066;  // V per A — verify against datasheet
 const float CURRENT_SAFETY_LIMIT_A = 15.0;
+
+// ---------- Battery / power supply ----------
+const int BATTERY_PIN = 35;             // ADC1 pin, -1 = not wired (no battery reading)
+const float DIVIDER_RATIO = (100.0 + 33.0) / 33.0;  // (R1 + R2) / R2 — 100k / 33k example
+const float BATTERY_V_EMPTY = 6.4;      // example: 2S Li-ion. Set to your pack's empty voltage
+const float BATTERY_V_FULL = 8.4;       // and full voltage
 
 // ---------- Rep detection ----------
 const float REP_THRESHOLD_G = 0.35;
@@ -68,16 +79,19 @@ int targetReps = 0;
 unsigned long targetDurationMs = 0;
 unsigned long sessionStartMs = 0;
 int repCount = 0;
-float currentSum = 0;
 float currentMax = 0;
-unsigned int currentSamples = 0;
+float lastCurrentA = 0;
 unsigned long lastGyroMs = 0;
-unsigned long lastPollMs = 0;
-const unsigned long POLL_INTERVAL_MS = 10000;  // check for a new program every 10s while idle
+
+// ---------- Reporting ----------
+const unsigned long IDLE_REPORT_MS = 3000;  // heartbeat while waiting for START
+const unsigned long RUN_REPORT_MS = 1000;   // live rep count while training
+unsigned long lastReportMs = 0;
 
 void setup() {
   Serial.begin(115200);
   Wire.begin();
+  analogReadResolution(12);
   mpuInit();
   calibrateGyro();
   connectWifi();
@@ -89,16 +103,19 @@ void loop() {
     return;
   }
 
-  if (!sessionRunning) {
-    unsigned long now = millis();
-    if (now - lastPollMs >= POLL_INTERVAL_MS) {
-      lastPollMs = now;
-      pollActiveProgram();
-    }
-  } else {
+  if (sessionRunning) {
     updateMotion();
     updateCurrent();
     checkSessionEnd();
+  } else {
+    lastCurrentA = readCurrentAmps();
+  }
+
+  unsigned long now = millis();
+  unsigned long interval = sessionRunning ? RUN_REPORT_MS : IDLE_REPORT_MS;
+  if (now - lastReportMs >= interval) {
+    lastReportMs = now;
+    sendTelemetry(sessionRunning ? "RUNNING" : "IDLE");
   }
 }
 
@@ -114,14 +131,37 @@ void connectWifi() {
   Serial.println(WiFi.status() == WL_CONNECTED ? " connected" : " failed, will retry");
 }
 
-// ---------- Fetch active program ----------
-void pollActiveProgram() {
+// ---------- Telemetry + commands ----------
+// Sends one report and acts on the command in the reply.
+void sendTelemetry(const char* state) {
+  JsonDocument doc;
+  doc["deviceId"] = DEVICE_ID;
+  doc["state"] = state;
+  doc["current"] = lastCurrentA;
+  doc["imuOk"] = imuOk;
+  if (strcmp(state, "RUNNING") == 0) doc["reps"] = repCount;
+
+  float volts = readBatteryVolts();
+  if (volts > 0) {
+    doc["voltage"] = volts;
+    doc["batteryLevel"] = batteryPercent(volts);
+  }
+
+  if (strcmp(state, "DONE") == 0) {
+    doc["totalReps"] = repCount;
+    doc["durationSec"] = (millis() - sessionStartMs) / 1000;
+    doc["distanceCm"] = totalDistanceCm;
+  }
+
+  String body;
+  serializeJson(doc, body);
+
   HTTPClient http;
-  String url = String(API_BASE_URL) + "/api/patient-programs?patient_id=" + PATIENT_ID;
-  http.begin(url);
-  int code = http.GET();
+  http.begin(String(API_BASE_URL) + "/api/devices/telemetry");
+  http.addHeader("Content-Type", "application/json");
+  int code = http.POST(body);
   if (code != 200) {
-    Serial.printf("GET patient-programs failed: %d\n", code);
+    Serial.printf("POST telemetry (%s) failed: %d %s\n", state, code, http.getString().c_str());
     http.end();
     return;
   }
@@ -129,29 +169,23 @@ void pollActiveProgram() {
   String payload = http.getString();
   http.end();
 
-  JsonDocument doc;  // ArduinoJson v7 auto-sizing document
-  DeserializationError err = deserializeJson(doc, payload);
-  if (err || !doc.is<JsonArray>() || doc.size() == 0) {
-    Serial.println("No program data available");
-    return;
-  }
+  JsonDocument reply;
+  if (deserializeJson(reply, payload)) return;
+  const char* command = reply["command"] | "";
 
-  JsonObject latest = doc[0].as<JsonObject>();
-  const char* status = latest["status"] | "";
-  if (strcmp(status, "ACTIVE") != 0) {
-    Serial.println("Latest program is not ACTIVE, waiting");
-    return;
+  if (strcmp(command, "START") == 0 && !sessionRunning) {
+    int reps = reply["targetReps"] | 0;
+    long durationSec = reply["durationSec"] | 0;
+    if (reps <= 0 || durationSec <= 0) {
+      Serial.println("START ignored: patient has no ACTIVE program");
+      return;
+    }
+    Serial.printf("Starting session: %d reps, %ld sec\n", reps, durationSec);
+    startSession(reps, durationSec);
+  } else if (strcmp(command, "STOP") == 0 && sessionRunning) {
+    Serial.println("STOP received from app");
+    endSession();
   }
-
-  int reps = latest["repeat_count"] | 0;
-  long durationSec = latest["duration_sec"] | 0;
-  if (reps <= 0 || durationSec <= 0) {
-    Serial.println("Program has invalid repeat_count/duration_sec");
-    return;
-  }
-
-  Serial.printf("Starting session: %d reps, %ld sec\n", reps, durationSec);
-  startSession(reps, durationSec);
 }
 
 // ---------- MPU6050 ----------
@@ -159,7 +193,8 @@ void mpuInit() {
   Wire.beginTransmission(MPU_ADDR);
   Wire.write(0x6B);
   Wire.write(0x00);
-  Wire.endTransmission(true);
+  imuOk = Wire.endTransmission(true) == 0;
+  if (!imuOk) Serial.println("MPU6050 not found — check wiring");
 }
 
 void calibrateGyro() {
@@ -225,14 +260,28 @@ float readCurrentAmps() {
 
 void updateCurrent() {
   float amps = readCurrentAmps();
-  currentSum += amps;
+  lastCurrentA = amps;
   currentMax = max(currentMax, fabs(amps));
-  currentSamples++;
 
   if (fabs(amps) > CURRENT_SAFETY_LIMIT_A) {
     Serial.printf("ALERT overcurrent: %.2f A\n", amps);
     endSession();
   }
+}
+
+// ---------- Battery ----------
+// Returns the supply voltage in volts, or 0 when no battery pin is wired.
+float readBatteryVolts() {
+  if (BATTERY_PIN < 0) return 0;
+  long sum = 0;
+  for (int i = 0; i < 16; i++) sum += analogRead(BATTERY_PIN);  // average out ADC noise
+  float pinVolts = (sum / 16.0) * (ADC_VREF / ADC_RES);
+  return pinVolts * DIVIDER_RATIO;
+}
+
+int batteryPercent(float volts) {
+  float pct = (volts - BATTERY_V_EMPTY) / (BATTERY_V_FULL - BATTERY_V_EMPTY) * 100.0;
+  return constrain((int)round(pct), 0, 100);
 }
 
 // ---------- Session control ----------
@@ -243,10 +292,9 @@ void startSession(int reps, unsigned long durationSec) {
   repCount = 0;
   totalDistanceCm = 0;
   lastRepAngleAccumDeg = 0;
-  currentSum = 0;
   currentMax = 0;
-  currentSamples = 0;
   lastGyroMs = 0;
+  aboveThreshold = false;
   sessionRunning = true;
 }
 
@@ -260,30 +308,8 @@ void checkSessionEnd() {
 void endSession() {
   if (!sessionRunning) return;
   sessionRunning = false;
-  unsigned long actualDurationSec = (millis() - sessionStartMs) / 1000;
   Serial.printf("Session done: %d reps, %lu sec, %.2f cm, maxCurrent %.2f A\n",
-                repCount, actualDurationSec, totalDistanceCm, currentMax);
-  postSessionResult(actualDurationSec);
-}
-
-// ---------- Report result to backend ----------
-void postSessionResult(unsigned long actualDurationSec) {
-  HTTPClient http;
-  String url = String(API_BASE_URL) + "/api/sessions";
-  http.begin(url);
-  http.addHeader("Content-Type", "application/json");
-
-  JsonDocument doc;
-  doc["patientId"] = PATIENT_ID;
-  doc["otId"] = OT_ID;
-  doc["usersId"] = USERS_ID;
-  doc["durationMin"] = actualDurationSec / 60.0;
-  doc["totalReps"] = repCount;
-
-  String body;
-  serializeJson(doc, body);
-
-  int code = http.POST(body);
-  Serial.printf("POST /api/sessions -> %d\n", code);
-  http.end();
+                repCount, (millis() - sessionStartMs) / 1000, totalDistanceCm, currentMax);
+  sendTelemetry("DONE");
+  lastReportMs = millis();
 }

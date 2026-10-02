@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { AuthUser, PageKey } from './types'
+import type { AuthUser, PageKey, TherapySession } from './types'
 import Sidebar from './components/Sidebar'
 import PatientTabBar from './components/PatientTabBar'
 import LoginPage from './pages/shared/LoginPage'
@@ -19,6 +19,8 @@ import PatientAppointmentsPage from './pages/patient/PatientAppointmentsPage'
 import PatientStatsPage from './pages/patient/PatientStatsPage'
 import PatientFeedbackPage from './pages/patient/PatientFeedbackPage'
 import PatientProfilePage from './pages/patient/PatientProfilePage'
+import PatientTrainPage from './pages/patient/PatientTrainPage'
+import PatientSummaryPage from './pages/patient/PatientSummaryPage'
 
 export interface ResumeTarget { patientId: string; usersId: string }
 
@@ -26,7 +28,7 @@ interface Session { token: string; user: AuthUser }
 
 const STAFF_PAGES: PageKey[] = ['overview', 'queue', 'register', 'therapists', 'devices', 'schedule', 'programs'] // 'staff' ปิดใช้งานชั่วคราว
 const THERAPIST_PAGES: PageKey[] = ['my-home', 'my-cases', 'my-schedule', 'programs', 'my-profile']
-const PATIENT_PAGES: PageKey[] = ['patient-home', 'patient-appointments', 'patient-stats', 'patient-feedback', 'patient-profile']
+const PATIENT_PAGES: PageKey[] = ['patient-home', 'patient-appointments', 'patient-stats', 'patient-feedback', 'patient-profile', 'patient-train', 'patient-summary']
 
 const loadSession = (): Session | null => {
   const raw = localStorage.getItem('als-session')
@@ -39,6 +41,7 @@ export default function App() {
   const [page, setPage] = useState<PageKey>('queue')
   const [regStep, setRegStep] = useState(1)
   const [resume, setResume] = useState<ResumeTarget | null>(null)
+  const [lastSet, setLastSet] = useState<TherapySession | null>(null)
 
   const handleLogin = (token: string, user: AuthUser) => {
     const s = { token, user }
@@ -69,18 +72,46 @@ export default function App() {
 
   if (isPatient) {
     const patientId = session.user.patient_id ?? ''
-    return (
-      <div className="pg-shell mx-auto flex h-screen max-w-[480px] flex-col border-x border-[#E4E1F0]">
-        <div className="flex shrink-0 items-center justify-between border-b border-[#1B1E2C]/[.06] bg-white/70 px-4 py-3.5 backdrop-blur-md">
-          <div>
-            <h1 className="text-[15px] font-extrabold text-[#1B1E2C]">ALS Rehab</h1>
-            <p className="text-[10.5px] text-[#82869C]">ระบบติดตามการฝึกและนัดหมาย</p>
+    const shell = 'patient-app mx-auto flex h-screen max-w-[480px] flex-col border-x border-[#ECE8F3]'
+
+    // หน้าระหว่างฝึก / สรุปหลังจบเซต แสดงเต็มจอ ไม่มีแถบหัวและแท็บด้านล่าง
+    if (effectivePage === 'patient-train' || effectivePage === 'patient-summary') {
+      return (
+        <div className={shell}>
+          <div className="flex-1 overflow-y-auto">
+            {effectivePage === 'patient-train' && (
+              <PatientTrainPage
+                patientId={patientId}
+                onBack={() => goto('patient-home')}
+                onFinish={s => { setLastSet(s); goto('patient-summary') }}
+              />
+            )}
+            {effectivePage === 'patient-summary' && (
+              <PatientSummaryPage
+                patientId={patientId}
+                firstName={session.user.first_name}
+                session={lastSet}
+                onHome={() => goto('patient-home')}
+                onHistory={() => goto('patient-stats')}
+              />
+            )}
           </div>
-          <button onClick={handleLogout} className="rounded-xl border border-white/80 bg-white/60 px-3 py-1.5 text-[11px] font-bold text-[#62677D] hover:text-[#E5533A]">
+        </div>
+      )
+    }
+
+    return (
+      <div className={shell}>
+        <div className="flex shrink-0 items-center justify-between px-5 pb-1 pt-4">
+          <div className="flex flex-col">
+            <span className="text-[17px] font-bold">ALS Rehab</span>
+            <span className="text-[12px] text-[#625E70]">ระบบติดตามการฝึกและนัดหมาย</span>
+          </div>
+          <button onClick={handleLogout} className="h-9 rounded-[10px] border border-[#E4E0EC] bg-white px-3.5 text-[13px] hover:text-[#A8430F]">
             ออกจากระบบ
           </button>
         </div>
-        <div className="flex-1 overflow-y-auto p-4">
+        <div className="flex-1 overflow-y-auto px-5 pb-4 pt-3">
           {effectivePage === 'patient-home'         && <PatientHomePage patientId={patientId} onNavigate={goto} />}
           {effectivePage === 'patient-appointments' && <PatientAppointmentsPage patientId={patientId} />}
           {effectivePage === 'patient-stats'        && <PatientStatsPage patientId={patientId} />}

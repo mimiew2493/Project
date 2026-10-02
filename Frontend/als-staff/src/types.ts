@@ -3,6 +3,7 @@ export type PageKey =
   | 'my-home' | 'my-cases' | 'my-schedule' | 'my-profile'
   | 'programs'
   | 'patient-home' | 'patient-appointments' | 'patient-stats' | 'patient-feedback' | 'patient-profile'
+  | 'patient-train' | 'patient-summary'
 
 /** ระยะอาการของโรคที่ใช้แบ่งประเภทโปรแกรมการฝึก */
 export type DiseaseStage = 'FLACCID' | 'SPASTIC' | 'RECOVERY'
@@ -45,6 +46,11 @@ export interface Device {
   imu_status?: 'OK' | 'WARNING' | 'ERROR' | 'UNKNOWN' | string
   encoder_status?: 'OK' | 'WARNING' | 'ERROR' | 'UNKNOWN' | string
   last_seen_at?: string | null
+  /** ค่าสดจากอุปกรณ์ (POST /api/devices/telemetry) */
+  live_status?: 'IDLE' | 'RUNNING' | string
+  live_reps?: number | null
+  voltage?: number | null
+  current_a?: number | null
   holder_patient_id?: string | null; holder_name?: string | null; issued_date?: string | null
 }
 

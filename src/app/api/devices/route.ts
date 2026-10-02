@@ -40,18 +40,27 @@ export async function GET() {
       if (row.device_id && !holderByDevice.has(row.device_id)) holderByDevice.set(row.device_id, row)
     }
 
+    // อุปกรณ์ส่ง telemetry ทุกไม่กี่วินาที — ถ้าเงียบเกิน STALE_MS ถือว่าหลุดการเชื่อมต่อ (บอร์ดที่ดับไปจะไม่ได้แจ้งเอง)
+    const STALE_MS = 20_000
+    const now = Date.now()
+
     const result = deviceRows.map(d => {
       const holder = holderByDevice.get(d.device_id)
+      const online = d.connection_status === 'CONNECTED' && !!d.last_seen_at && now - d.last_seen_at.getTime() < STALE_MS
       return {
         device_id: d.device_id,
         device_name: d.device_name,
         serial_number: d.serial_number,
         status: d.status,
-        connection_status: d.connection_status,
+        connection_status: online ? 'CONNECTED' : 'DISCONNECTED',
         battery_level: d.battery_level,
         imu_status: d.imu_status,
         encoder_status: d.encoder_status,
         last_seen_at: d.last_seen_at,
+        live_status: online ? d.live_status : 'IDLE',
+        live_reps: online ? d.live_reps : null,
+        voltage: d.voltage != null ? Number(d.voltage) : null,
+        current_a: d.current_a != null ? Number(d.current_a) : null,
         holder_patient_id: holder?.patient_id ?? null,
         holder_name: holder ? `${holder.first_name ?? ''} ${holder.last_name ?? ''}`.trim() : null,
         issued_date: holder?.appointment_date ?? null,

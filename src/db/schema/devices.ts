@@ -2,6 +2,7 @@ import {
   pgTable,
   varchar,
   integer,
+  decimal,
   timestamp,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
@@ -20,7 +21,7 @@ export const devices = pgTable("devices", {
     .notNull()
     .default("ACTIVE"),
 
-  // เทเลเมทรีของอุปกรณ์ skateboard rehab — รายงานจากตัวอุปกรณ์ผ่านไฟร์มแวร์ (ยังไม่มี ingestion จริง จึงมีค่า default ไว้ก่อน)
+  // เทเลเมทรีของอุปกรณ์ skateboard rehab — รายงานจากตัวอุปกรณ์ผ่านไฟร์มแวร์ (อุปกรณ์ส่งเข้ามาผ่าน POST /api/devices/telemetry)
   connection_status: varchar("connection_status", { length: 20 })
     .notNull()
     .default("DISCONNECTED"), // CONNECTED | DISCONNECTED
@@ -36,6 +37,20 @@ export const devices = pgTable("devices", {
     .default("UNKNOWN"), // OK | WARNING | ERROR | UNKNOWN
 
   last_seen_at: timestamp("last_seen_at"),
+
+  // ค่าสดระหว่างฝึก รายงานผ่าน POST /api/devices/telemetry
+  live_status: varchar("live_status", { length: 20 })
+    .notNull()
+    .default("IDLE"), // IDLE | RUNNING
+
+  live_reps: integer("live_reps"), // null = ไม่ได้อยู่ระหว่างเซต
+
+  voltage: decimal("voltage", { precision: 5, scale: 2 }), // แรงดันแหล่งจ่าย (V)
+
+  current_a: decimal("current_a", { precision: 5, scale: 2 }), // กระแสจาก Pmod ISNS20 (A)
+
+  // คำสั่งจากแอปที่รอให้อุปกรณ์มารับตอนส่ง telemetry ครั้งถัดไป
+  pending_command: varchar("pending_command", { length: 20 }), // START | STOP | null
 
   created_at: timestamp("created_at")
     .defaultNow()
