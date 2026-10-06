@@ -1,6 +1,6 @@
 import { pgTable, varchar, date } from "drizzle-orm/pg-core";
-import { sql } from "drizzle-orm";
 import { patients } from "./patients";
+import { treatmentCases } from "./treatmentCases";
 import { programs } from "./program";
 import { occupationalTherapists } from "./occupationalTherapist";
 
@@ -37,4 +37,7 @@ export const patientPrograms = pgTable("patient_programs", {
   end_date: date("end_date"),
 
   status: varchar("status", { length: 20 }).default("ACTIVE"),
+
+  // โปรแกรมที่มอบให้ในเคส (คอร์ส) นั้น
+  case_id: varchar("case_id").references(() => treatmentCases.case_id),
 });

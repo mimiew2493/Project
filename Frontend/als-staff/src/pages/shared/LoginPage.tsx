@@ -1,108 +1,52 @@
 import { useState } from 'react'
 import type { AuthUser } from '../../types'
-import { API_BASE } from '../../config'
-import { IdCardIcon, LockIcon, EyeIcon, EyeOffIcon, LogInIcon } from '../../components/Icon'
+import { api } from '../../lib/clinic'
+import { inputCls } from '../../components/ui'
 
 interface Props { onLogin: (token: string, user: AuthUser) => void }
 
 export default function LoginPage({ onLogin }: Props) {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
-  const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!username || !password) { setError('กรุณากรอกรหัสและรหัสผ่าน'); return }
+    if (!username || !password) { setError('กรุณากรอกเบอร์โทรหรืออีเมล และรหัสผ่าน'); return }
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch(`${API_BASE}/api/auth/login`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password }),
-      })
-      const data = await res.json()
-      if (!res.ok) { setError(data.error ?? 'เข้าสู่ระบบไม่สำเร็จ'); setLoading(false); return }
+      const data = await api<{ token: string; user: AuthUser }>('/api/auth/login', { method: 'POST', body: { username: username.trim(), password } })
       onLogin(data.token, data.user)
-    } catch {
-      setError('ไม่สามารถเชื่อมต่อ Backend ได้')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'เข้าสู่ระบบไม่สำเร็จ')
       setLoading(false)
     }
   }
 
   return (
-    <div className="login-shell">
-      <div className="login-brand">
-        <div className="login-brand-inner">
-          <h1 className="login-heading">
-            <span className="line-white">ระบบสนับสนุนการฟื้นฟู</span>
-            <span className="line-blue">ผู้ป่วยระบบประสาทและกล้ามเนื้อ</span>
-          </h1>
-          <p className="login-brand-sub">
-            สนับสนุนผู้เชี่ยวชาญด้านการฟื้นฟูระบบประสาทด้วยข้อมูลอุปกรณ์แบบเรียลไทม์และการวินิจฉัยผู้ป่วยอย่างมีประสิทธิภาพ
-          </p>
+    <div className="flex min-h-screen items-center justify-center bg-rx-bg p-6 font-rx text-rx-ink">
+      <form onSubmit={submit} className="flex w-full max-w-[400px] flex-col gap-[18px] rounded-lg border border-white bg-white px-7 py-8">
+        <div className="flex flex-col gap-1 text-center">
+          <span className="text-[26px] font-semibold">ALS Rehab</span>
+          <span className="text-[14px] text-rx-muted">ระบบติดตามการฝึกและนัดหมาย</span>
         </div>
-      </div>
-
-      <div className="login-panel">
-        <form className="login-form" onSubmit={submit}>
-          <div className="login-head">
-            <h1>เข้าสู่ระบบ</h1>
-            <p>โปรดระบุข้อมูลเพื่อเริ่มต้นการใช้งาน</p>
-          </div>
-
-          <div className="field">
-            <label className="field-label">รหัสนักกายภาพบำบัด</label>
-            <div className="input-icon-wrap">
-              <span className="input-icon-left"><IdCardIcon size={16} /></span>
-              <input
-                className="inp"
-                value={username}
-                onChange={e => setUsername(e.target.value)}
-                placeholder="เช่น PT-99999"
-                autoFocus
-                autoComplete="username"
-              />
-            </div>
-          </div>
-
-          <div className="field">
-            <div className="login-row-split">
-              <label className="field-label">รหัสผ่าน</label>
-              <button type="button" className="login-forgot">ลืมรหัสผ่าน?</button>
-            </div>
-            <div className="input-icon-wrap has-right">
-              <span className="input-icon-left"><LockIcon size={16} /></span>
-              <input
-                className="inp"
-                type={showPassword ? 'text' : 'password'}
-                value={password}
-                onChange={e => setPassword(e.target.value)}
-                placeholder="........"
-                autoComplete="current-password"
-              />
-              <button
-                type="button"
-                className="input-icon-right"
-                onClick={() => setShowPassword(s => !s)}
-                aria-label={showPassword ? 'ซ่อนรหัสผ่าน' : 'แสดงรหัสผ่าน'}
-              >
-                {showPassword ? <EyeOffIcon size={16} /> : <EyeIcon size={16} />}
-              </button>
-            </div>
-          </div>
-
-          {error && <div style={{ color: 'var(--rose)', fontSize: 12, marginTop: 4 }}>{error}</div>}
-
-          <button className="btn btn-login" type="submit" disabled={loading}>
-            {loading ? 'กำลังเข้าสู่ระบบ...' : 'เข้าสู่ระบบ'}
-            <LogInIcon size={16} />
-          </button>
-
-          <div className="login-footer">ภาษาไทย &nbsp;|&nbsp; ติดต่อช่วยเหลือ</div>
-        </form>
-      </div>
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="uid" className="text-[13px] font-semibold">เบอร์โทรหรืออีเมล</label>
+          <input id="uid" className={inputCls} value={username} onChange={e => setUsername(e.target.value)} placeholder="08x-xxx-xxxx" autoComplete="username" autoFocus />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="pw" className="text-[13px] font-semibold">รหัสผ่าน</label>
+          <input id="pw" className={inputCls} type="password" value={password} onChange={e => setPassword(e.target.value)} autoComplete="current-password" />
+        </div>
+        <a href="#" onClick={e => e.preventDefault()} className="flex min-h-8 items-center self-end text-[13px] text-rx-accent-ink hover:text-rx-accent-deep">ลืมรหัสผ่าน</a>
+        {error && <div className="rounded-lg bg-[#FCEBEB] px-3.5 py-2.5 text-[13px] text-[#791F1F]">{error}</div>}
+        <button type="submit" disabled={loading} className="flex h-11 items-center justify-center rounded-lg bg-rx-accent px-[18px] text-[14px] font-semibold text-white hover:bg-rx-accent-ink disabled:opacity-60">
+          {loading ? 'กำลังเข้าสู่ระบบ...' : 'เข้าสู่ระบบ'}
+        </button>
+        <span className="text-center text-[13px] leading-relaxed text-rx-muted">ระบบจะพาไปหน้าตามบทบาทของบัญชี<br />ผู้ป่วยใหม่ลงทะเบียนที่เคาน์เตอร์เวชระเบียน</span>
+      </form>
     </div>
   )
 }

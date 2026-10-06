@@ -16,7 +16,9 @@ const client =
   globalForDb.pgClient ??
   postgres(connectionString, {
     ssl: "require",
-    max: 10,
+    // Supabase session pooler จำกัด 15 connection ต่อโปรเจกต์ — ใช้น้อย ๆ และคืน connection ที่ว่างเกิน 20 วินาที
+    max: 5,
+    idle_timeout: 20,
   });
 
 if (process.env.NODE_ENV !== "production") {

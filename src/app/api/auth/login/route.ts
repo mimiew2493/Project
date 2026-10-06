@@ -4,14 +4,14 @@ import { roles } from '@/src/db/schema/roles'
 import { occupationalTherapists } from '@/src/db/schema/occupationalTherapist'
 import { patients } from '@/src/db/schema/patients'
 import { verifyPassword } from '@/src/utils/password'
-import { eq } from 'drizzle-orm'
+import { eq, or } from 'drizzle-orm'
 import { NextResponse } from 'next/server'
 import jwt from 'jsonwebtoken'
 
 const cors = {
   'Access-Control-Allow-Origin': process.env.ALLOWED_ORIGIN || 'http://localhost:5173',
   'Access-Control-Allow-Methods': 'POST',
-  'Access-Control-Allow-Headers': 'Content-Type',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Device-Key',
 }
 
 export async function OPTIONS() {
@@ -39,7 +39,7 @@ export async function POST(req: Request) {
       })
       .from(users)
       .innerJoin(roles, eq(users.role_id, roles.role_id))
-      .where(eq(users.username, body.username))
+      .where(or(eq(users.username, body.username), eq(users.email, body.username)))
 
     if (!row || !(await verifyPassword(body.password, row.password))) {
       return NextResponse.json({ error: 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง' }, { status: 401, headers: cors })

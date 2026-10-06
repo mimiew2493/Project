@@ -4,8 +4,12 @@
   Reads limb motion from the MPU6050 to count reps for a training program,
   and monitors motor/actuator current from the Pmod ISNS20 for over-current
   safety cutoff. Talks to a host (PC/RPi bridge script) over Serial using a
-  small line protocol so the host can relay results to the existing
-  POST /api/sessions endpoint ({ patientId, otId, usersId, durationMin, totalReps }).
+  small line protocol. The host relays status to POST /api/devices/telemetry
+  ({ deviceId, state: RUNNING | DONE, reps, totalReps, durationSec }) with the
+  board's X-Device-Key header, and forwards the reply's START/STOP command
+  back to this device. The board never knows which patient it measures: the
+  database links each set to the appointment the board is bound to.
+  There is no rep target — a set ends at <durationSec> or on STOP.
 
   Wiring
   ------
@@ -24,7 +28,9 @@
   Serial protocol (115200 baud)
   ------------------------------
   Host -> device:
-    START <targetReps> <durationSec>   start a session
+    START <durationSec>                 start a set (no rep target; the old
+                                        "START <reps> <durationSec>" form is
+                                        still accepted and the reps ignored)
     STOP                                abort the current session
   Device -> host:
     DATA,<elapsedSec>,<repCount>,<currentA>       periodic status (~5 Hz)
@@ -60,7 +66,6 @@ float totalDistanceCm = 0;
 
 // ---------- Session state ----------
 bool sessionRunning = false;
-int targetReps = 0;
 unsigned long targetDurationMs = 0;
 unsigned long sessionStartMs = 0;
 int repCount = 0;
@@ -172,8 +177,7 @@ void updateCurrent() {
 }
 
 // ---------- Session control ----------
-void startSession(int reps, unsigned long durationSec) {
-  targetReps = reps;
+void startSession(unsigned long durationSec) {
   targetDurationMs = durationSec * 1000UL;
   sessionStartMs = millis();
   repCount = 0;
@@ -201,7 +205,8 @@ void reportProgress() {
 
 void checkSessionEnd() {
   unsigned long elapsed = millis() - sessionStartMs;
-  if (repCount >= targetReps || elapsed >= targetDurationMs) {
+  // ไม่มีเป้าหมายจำนวนครั้ง — จบเมื่อครบเวลาของเซต (หรือได้ STOP / กระแสเกิน)
+  if (elapsed >= targetDurationMs) {
     endSession();
   }
 }
@@ -228,10 +233,10 @@ void handleSerialCommands() {
   String line = Serial.readStringUntil('\n');
   line.trim();
   if (line.startsWith("START")) {
-    int reps = 0;
-    unsigned long durationSec = 0;
-    sscanf(line.c_str(), "START %d %lu", &reps, &durationSec);
-    if (reps > 0 && durationSec > 0) startSession(reps, durationSec);
+    unsigned long a = 0, b = 0;
+    int n = sscanf(line.c_str(), "START %lu %lu", &a, &b);
+    unsigned long durationSec = n >= 2 ? b : a;  // รูปแบบเก่ามีจำนวนครั้งนำหน้า — ไม่ใช้แล้ว
+    if (durationSec > 0) startSession(durationSec);
   } else if (line == "STOP") {
     endSession();
   }

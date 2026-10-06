@@ -18,30 +18,6 @@ export function ProgressRing({ size, stroke, pct, children }: { size: number; st
   )
 }
 
-/** วงกลมเลขครั้ง 1..target — ถ้าเป้าหมายเยอะเกินจะแสดงเป็นแถบแทน */
-export function RepDots({ done, target }: { done: number; target: number }) {
-  if (target <= 0) return null
-  if (target > 12) {
-    return (
-      <div className="h-2.5 w-full overflow-hidden rounded-full bg-[#F1EDF6]">
-        <div className="h-full rounded-full bg-[#C4501A] transition-[width]" style={{ width: `${Math.min(100, (done / target) * 100)}%` }} />
-      </div>
-    )
-  }
-  return (
-    <div className="flex gap-[5px]">
-      {Array.from({ length: target }, (_, i) => {
-        const n = i + 1
-        const cls = n <= done
-          ? 'bg-[#C4501A] font-semibold text-white'
-          : n === done + 1
-            ? 'border-2 border-[#C4501A] font-semibold text-[#A8430F]'
-            : 'bg-[#F1EDF6] text-[#625E70]'
-        return <span key={n} className={`flex h-6 w-6 items-center justify-center rounded-full text-[11px] ${cls}`}>{n}</span>
-      })}
-    </div>
-  )
-}
 
 export function SetSegments({ done, total }: { done: number; total: number }) {
   return (

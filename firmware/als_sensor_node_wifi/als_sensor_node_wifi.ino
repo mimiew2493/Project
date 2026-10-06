@@ -2,18 +2,21 @@
   ALS Rehab Sensor Node — WiFi/HTTP variant (ESP32)
 
   Talks to the web app directly over WiFi — no PC bridge script needed.
-  The device only needs its own DEVICE_ID; the backend works out which
-  patient holds it (from the SCHEDULED appointment the device is attached to)
-  and which program targets apply.
+  The device only needs its own DEVICE_ID and never knows which patient it is
+  measuring: the database binds the board to one appointment at a time
+  (devices.current_appointment_id, set when the therapist connects the board)
+  and links every set back to that patient. Values sent while the board is
+  not bound are rejected.
 
   Flow (everything goes through POST /api/devices/telemetry):
     1. Idle: send a heartbeat every IDLE_REPORT_MS with battery/voltage/current.
        The reply carries any command the patient app left for this device.
-    2. Reply command "START" (patient pressed "เริ่มเซต" in the app):
-       start a session using the reply's targetReps / durationSec.
+    2. Reply command "START" (therapist connected the board, or started the
+       next set): start counting. There is no rep target — the patient does
+       as many as they can; the set ends at setDurationSec or on "STOP".
     3. Running: send { state: "RUNNING", reps } every RUN_REPORT_MS so the
        patient screen counts live. A "STOP" command ends the set early.
-    4. Set ends (target reps, target time, STOP or over-current):
+    4. Set ends (set time, STOP or over-current):
        send { state: "DONE", totalReps, durationSec, distanceCm } and the
        backend records the therapy session for the patient.
 
@@ -43,6 +46,9 @@ const char* WIFI_PASSWORD = "YOUR_WIFI_PASSWORD";
 // (e.g. "http://192.168.1.10:3000") or the deployed backend URL, no trailing slash.
 const char* API_BASE_URL = "http://192.168.1.10:3000";
 const char* DEVICE_ID = "DEV000001";  // must match a device in the web app's device inventory
+// Key issued by the web app (PATCH /api/devices { deviceId, issueKey: true }). The database only stores
+// its SHA-256 hash. Leave empty only while the board has no key yet.
+const char* DEVICE_KEY = "";
 
 // ---------- MPU6050 ----------
 const uint8_t MPU_ADDR = 0x68;
@@ -75,7 +81,6 @@ float totalDistanceCm = 0;
 
 // ---------- Session state ----------
 bool sessionRunning = false;
-int targetReps = 0;
 unsigned long targetDurationMs = 0;
 unsigned long sessionStartMs = 0;
 int repCount = 0;
@@ -159,6 +164,7 @@ void sendTelemetry(const char* state) {
   HTTPClient http;
   http.begin(String(API_BASE_URL) + "/api/devices/telemetry");
   http.addHeader("Content-Type", "application/json");
+  if (strlen(DEVICE_KEY) > 0) http.addHeader("X-Device-Key", DEVICE_KEY);
   int code = http.POST(body);
   if (code != 200) {
     Serial.printf("POST telemetry (%s) failed: %d %s\n", state, code, http.getString().c_str());
@@ -174,14 +180,13 @@ void sendTelemetry(const char* state) {
   const char* command = reply["command"] | "";
 
   if (strcmp(command, "START") == 0 && !sessionRunning) {
-    int reps = reply["targetReps"] | 0;
-    long durationSec = reply["durationSec"] | 0;
-    if (reps <= 0 || durationSec <= 0) {
-      Serial.println("START ignored: patient has no ACTIVE program");
+    long durationSec = reply["setDurationSec"] | 0;
+    if (!(reply["bound"] | false) || durationSec <= 0) {
+      Serial.println("START ignored: board is not bound to an appointment in progress");
       return;
     }
-    Serial.printf("Starting session: %d reps, %ld sec\n", reps, durationSec);
-    startSession(reps, durationSec);
+    Serial.printf("Starting set: up to %ld sec, no rep target\n", durationSec);
+    startSession(durationSec);
   } else if (strcmp(command, "STOP") == 0 && sessionRunning) {
     Serial.println("STOP received from app");
     endSession();
@@ -285,8 +290,7 @@ int batteryPercent(float volts) {
 }
 
 // ---------- Session control ----------
-void startSession(int reps, unsigned long durationSec) {
-  targetReps = reps;
+void startSession(unsigned long durationSec) {
   targetDurationMs = durationSec * 1000UL;
   sessionStartMs = millis();
   repCount = 0;
@@ -300,7 +304,8 @@ void startSession(int reps, unsigned long durationSec) {
 
 void checkSessionEnd() {
   unsigned long elapsed = millis() - sessionStartMs;
-  if (repCount >= targetReps || elapsed >= targetDurationMs) {
+  // ไม่มีเป้าหมายจำนวนครั้ง — เซตจบเมื่อครบเวลาของเซต (หรือได้ STOP / กระแสเกิน)
+  if (elapsed >= targetDurationMs) {
     endSession();
   }
 }

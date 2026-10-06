@@ -1,245 +1,132 @@
 import { useEffect, useState } from 'react'
-import type { Program, DiseaseStage, AuthUser } from '../../types'
-import TopHeader from '../../components/dashboard/TopHeader'
-import { ClipboardListIcon } from '../../components/Icon'
-import { Activity, Zap, TrendingUp, type LucideIcon } from 'lucide-react'
-import { API_BASE } from '../../config'
+import { Plus } from 'lucide-react'
+import type { AuthUser, DiseaseStage, Patient, Program } from '../../types'
+import { api, list, STAGES, STAGE_LABEL, stageLabel, fullName } from '../../lib/clinic'
+import { Badge, Btn, Chip, ErrorText, Field, Loading, inputCls, selectCls, textareaCls } from '../../components/ui'
 
-const STAGE_ICON: Record<DiseaseStage, LucideIcon> = { FLACCID: Activity, SPASTIC: Zap, RECOVERY: TrendingUp }
-const STAGE_TILE: Record<DiseaseStage, string> = {
-  FLACCID: 'bg-gradient-to-br from-[#ff8fa3] to-[#f0596c]',
-  SPASTIC: 'bg-gradient-to-br from-[#ffc978] to-[#e69a3e]',
-  RECOVERY: 'bg-gradient-to-br from-dash-green to-[#3fae7d]',
-}
+interface Props { user: AuthUser }
 
-interface Props { user: AuthUser; usersId: string; roleId: string }
+const EMPTY = { programName: '', description: '', targetStage: 'EARLY' as DiseaseStage, sessionPerDay: '2', durationMin: '15' }
 
-export const STAGE_LABEL: Record<DiseaseStage, string> = {
-  FLACCID: 'ระยะแรก',
-  SPASTIC: 'ระยะเกร็ง',
-  RECOVERY: 'ระยะฟื้นตัว',
-}
-
-export const STAGE_PILL: Record<DiseaseStage, string> = {
-  FLACCID: 'pill-rose',
-  SPASTIC: 'pill-amber',
-  RECOVERY: 'pill-green',
-}
-
-const STAGE_FILTERS: { key: DiseaseStage | 'ALL'; label: string }[] = [
-  { key: 'ALL', label: 'ทุกระยะ' },
-  { key: 'FLACCID', label: STAGE_LABEL.FLACCID },
-  { key: 'SPASTIC', label: STAGE_LABEL.SPASTIC },
-  { key: 'RECOVERY', label: STAGE_LABEL.RECOVERY },
-]
-
-const emptyForm = { programName: '', description: '', targetStage: '' as DiseaseStage | '', repeatCount: '3', sessionPerDay: '1', durationMin: '20', isSystem: false }
-
-const Field = ({ label, children }: { label: string; children: React.ReactNode }) => (
-  <div className="field"><label className="field-label">{label}</label>{children}</div>
-)
-
-export default function ProgramLibraryPage({ user, usersId, roleId }: Props) {
-  const canCreate = roleId === 'R002'
+export default function ProgramLibraryPage({ user }: Props) {
+  const isPt = user.role_id === 'R002'
   const [programs, setPrograms] = useState<Program[]>([])
+  const [cases, setCases] = useState<Patient[]>([])
   const [loading, setLoading] = useState(true)
-  const [stageFilter, setStageFilter] = useState<DiseaseStage | 'ALL'>('ALL')
-  const [showForm, setShowForm] = useState(false)
-  const [editingId, setEditingId] = useState<string | null>(null)
-  const [form, setForm] = useState(emptyForm)
+  const [form, setForm] = useState<typeof EMPTY | null>(null)
+  const [assign, setAssign] = useState<Program | null>(null)
+  const [assignTo, setAssignTo] = useState('')
   const [saving, setSaving] = useState(false)
-  const [busyId, setBusyId] = useState<string | null>(null)
+  const [error, setError] = useState('')
+  const [msg, setMsg] = useState('')
 
-  const load = () => {
-    setLoading(true)
-    fetch(`${API_BASE}/api/programs?created_by=${usersId}`)
-      .then(r => r.json())
-      .then(d => { if (Array.isArray(d)) setPrograms(d) })
-      .catch(() => {})
-      .finally(() => setLoading(false))
-  }
+  const load = () => list<Program>(isPt ? `/api/programs?created_by=${user.users_id}` : '/api/programs').then(setPrograms).finally(() => setLoading(false))
+  useEffect(() => {
+    load()
+    if (isPt) list<Patient>('/api/patients?status=ALL').then(ps => setCases(ps.filter(p => p.primary_ot_id === user.ot_id && p.case_status === 'ACTIVE')))
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  useEffect(load, [usersId])
+  const openCreate = () => { setForm(EMPTY); setError(''); setAssign(null) }
 
-  const ch = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
-    const { name, value } = e.target
-    setForm(p => ({ ...p, [name]: value }))
-  }
-
-  const openCreateForm = () => { setEditingId(null); setForm(emptyForm); setShowForm(true) }
-  const startEdit = (p: Program) => {
-    setEditingId(p.program_id)
-    setForm({
-      programName: p.program_name, description: p.description ?? '',
-      targetStage: (p.target_stage ?? '') as DiseaseStage | '',
-      repeatCount: String(p.repeat_count), sessionPerDay: String(p.session_per_day),
-      durationMin: String(Math.round(p.duration_sec / 60)), isSystem: p.program_type === 'SYSTEM',
-    })
-    setShowForm(true)
-  }
-  const closeForm = () => { setShowForm(false); setEditingId(null); setForm(emptyForm) }
-
-  const saveProgram = async () => {
-    if (!form.programName) { alert('กรุณาระบุชื่อโปรแกรม'); return }
-    if (!form.targetStage) { alert('กรุณาเลือกระยะอาการของโปรแกรม'); return }
-    setSaving(true)
-    const res = editingId
-      ? await fetch(`${API_BASE}/api/programs`, {
-          method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            programId: editingId, usersId, programName: form.programName, description: form.description,
-            targetStage: form.targetStage, repeatCount: form.repeatCount, sessionPerDay: form.sessionPerDay,
-            durationMin: form.durationMin,
-          }),
-        }).catch(() => null)
-      : await fetch(`${API_BASE}/api/programs`, {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            usersId, programName: form.programName, description: form.description,
-            targetStage: form.targetStage || undefined,
-            repeatCount: form.repeatCount, sessionPerDay: form.sessionPerDay, durationMin: form.durationMin,
-            programType: form.isSystem ? 'SYSTEM' : 'CUSTOM',
-          }),
-        }).catch(() => null)
-    if (res?.ok) { closeForm(); load() }
-    else { const data = await res?.json().catch(() => null); alert(data?.error ?? (editingId ? 'แก้ไขโปรแกรมไม่สำเร็จ' : 'สร้างโปรแกรมไม่สำเร็จ')) }
+  const save = async () => {
+    if (!form) return
+    if (!form.programName.trim()) { setError('กรุณาระบุชื่อโปรแกรม'); return }
+    setSaving(true); setError('')
+    try {
+      await api('/api/programs', { method: 'POST', body: { usersId: user.users_id, ...form } })
+      setForm(null); setMsg('สร้างโปรแกรมแล้ว'); await load()
+    } catch (e) { setError((e as Error).message) }
     setSaving(false)
   }
 
-  const toggleStatus = async (p: Program) => {
-    setBusyId(p.program_id)
-    const nextStatus = p.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE'
-    const res = await fetch(`${API_BASE}/api/programs`, {
-      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ programId: p.program_id, usersId, status: nextStatus }),
-    }).catch(() => null)
-    if (res?.ok) load()
-    else alert('แก้ไขไม่สำเร็จ')
-    setBusyId(null)
+  const doAssign = async () => {
+    if (!assign || !assignTo) return
+    setSaving(true); setError('')
+    try {
+      await api('/api/patient-programs', { method: 'POST', body: { patientId: assignTo, programId: assign.program_id, otId: user.ot_id } })
+      const p = cases.find(c => c.patient_id === assignTo)
+      setMsg(`มอบ "${assign.program_name}" ให้ ${fullName(p?.first_name, p?.last_name)} แล้ว`)
+      setAssign(null); setAssignTo(''); await load()
+    } catch (e) { setError((e as Error).message) }
+    setSaving(false)
   }
 
-  const removeProgram = async (p: Program) => {
-    if (!confirm(`ยืนยันลบโปรแกรม "${p.program_name}"? การลบไม่สามารถย้อนกลับได้`)) return
-    setBusyId(p.program_id)
-    const res = await fetch(`${API_BASE}/api/programs?program_id=${p.program_id}&users_id=${usersId}`, { method: 'DELETE' }).catch(() => null)
-    if (res?.ok) load()
-    else { const data = await res?.json().catch(() => null); alert(data?.error ?? 'ลบไม่สำเร็จ') }
-    setBusyId(null)
-  }
-
-  const filtered = programs.filter(p => stageFilter === 'ALL' || p.target_stage === stageFilter)
-
-  if (loading) return <div className="loading-box">กำลังโหลด...</div>
+  if (loading) return <Loading />
+  const shown = programs.filter(p => p.status === 'ACTIVE')
+  const setF = (k: keyof typeof EMPTY) => (e: { target: { value: string } }) => setForm(f => (f ? { ...f, [k]: e.target.value } : f))
 
   return (
     <>
-      <TopHeader
-        title="คลังโปรแกรมฝึก"
-        breadcrumb={['หน้าแรก', 'คลังโปรแกรมฝึก']}
-        user={user}
-        action={canCreate ? { label: showForm ? 'ยกเลิก' : 'สร้างโปรแกรมใหม่', onClick: () => (showForm ? closeForm() : openCreateForm()) } : undefined}
-      />
-      <p className="page-sub" style={{ marginTop: -10 }}>โปรแกรมของคุณและโปรแกรมกลาง จัดกลุ่มตามระยะอาการของโรคเพื่อเลือกให้เหมาะกับผู้ป่วยแต่ละคน</p>
-
-      {!canCreate && (
-        <div className="note" style={{ marginBottom: 14 }}>การสร้าง แก้ไข และลบโปรแกรมเป็นสิทธิของนักกิจกรรมบำบัดเท่านั้น — หน้านี้แสดงเพื่อดูโปรแกรมที่มีอยู่สำหรับใช้ตอนลงทะเบียนผู้ป่วย</div>
-      )}
-
-      {canCreate && showForm && (
-        <div className="card" style={{ borderColor: 'var(--blue)' }}>
-          <div className="h-sec"><span className="h-sec-title">{editingId ? `แก้ไขโปรแกรม · ${editingId}` : 'สร้างโปรแกรมใหม่'}</span></div>
-          <div className="field"><label className="field-label">ชื่อโปรแกรม</label>
-            <input className="inp" name="programName" value={form.programName} onChange={ch} placeholder="เช่น โปรแกรมฟื้นฟูแขนระยะแรก" />
-          </div>
-          <div className="field"><label className="field-label">รายละเอียด</label>
-            <textarea className="inp" name="description" rows={2} value={form.description} onChange={ch} />
-          </div>
-          <div className="grid2">
-            <Field label="ระยะอาการที่เหมาะสม">
-              <select className="inp" name="targetStage" value={form.targetStage} onChange={ch}>
-                <option value="">-- เลือกระยะ --</option>
-                <option value="FLACCID">{STAGE_LABEL.FLACCID}</option>
-                <option value="SPASTIC">{STAGE_LABEL.SPASTIC}</option>
-                <option value="RECOVERY">{STAGE_LABEL.RECOVERY}</option>
-              </select>
-            </Field>
-            {!editingId && (
-              <Field label="ขอบเขตการใช้งาน">
-                <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, height: 38 }}>
-                  <input type="checkbox" checked={form.isSystem} onChange={e => setForm(p => ({ ...p, isSystem: e.target.checked }))} />
-                  โปรแกรมกลาง — ใช้ได้กับนักกายภาพทุกคน
-                </label>
-              </Field>
-            )}
-          </div>
-          <div className="grid3">
-            <Field label="ครั้ง/เซต"><input className="inp" name="repeatCount" type="number" min="1" value={form.repeatCount} onChange={ch} /></Field>
-            <Field label="เซต/วัน"><input className="inp" name="sessionPerDay" type="number" min="1" value={form.sessionPerDay} onChange={ch} /></Field>
-            <Field label="นาที/ครั้ง"><input className="inp" name="durationMin" type="number" min="1" value={form.durationMin} onChange={ch} /></Field>
-          </div>
-          <div className="form-actions">
-            <button className="btn btn-ghost btn-sm" onClick={closeForm} disabled={saving}>ยกเลิก</button>
-            <button className="btn btn-sm" onClick={saveProgram} disabled={saving}>{saving ? 'กำลังบันทึก...' : editingId ? 'บันทึกการแก้ไข' : 'สร้างโปรแกรม'}</button>
-          </div>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-col">
+          <h1 className="m-0 text-[30px] font-semibold">{isPt ? 'คลังโปรแกรม' : 'คลังโปรแกรมฝึก'}</h1>
+          <span className="text-[13px] text-rx-muted">{isPt ? 'เลือกโปรแกรมแล้วมอบให้ผู้ป่วยในเคสของคุณ' : `โปรแกรมทั้งหมด ${shown.length} รายการ · เนื้อหาโปรแกรมกำหนดโดยนักกายภาพ`}</span>
         </div>
-      )}
-
-      <div style={{ display: 'flex', gap: 6, marginBottom: 14, flexWrap: 'wrap' }}>
-        {STAGE_FILTERS.map(f => (
-          <button key={f.key} className={`filter-pill ${stageFilter === f.key ? 'active' : ''}`} onClick={() => setStageFilter(f.key)}>{f.label}</button>
-        ))}
+        {isPt && <Btn onClick={openCreate}><Plus size={18} />สร้างโปรแกรม</Btn>}
       </div>
 
-      <div className="result-count">พบ {filtered.length} โปรแกรม</div>
+      {msg && <div className="rounded-lg bg-[#E4F5EC] px-4 py-2.5 text-[13px] font-semibold text-[#145C38]">{msg}</div>}
+      <ErrorText>{error}</ErrorText>
 
-      {filtered.length === 0 ? (
-        <div className="empty-box">
-          <div className="empty-icon"><ClipboardListIcon size={48} /></div>
-          <div className="empty-title">ยังไม่มีโปรแกรมในหมวดนี้</div>
-          <div className="empty-sub">กด "+ สร้างโปรแกรมใหม่" ด้านบนเพื่อเริ่มสร้างโปรแกรมสำหรับระยะอาการนี้</div>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          {filtered.map(p => {
-            const StageIcon = p.target_stage ? STAGE_ICON[p.target_stage] : ClipboardListIcon
-            const tileBg = p.target_stage ? STAGE_TILE[p.target_stage] : 'bg-gradient-to-br from-dash-primary to-dash-cyan'
-            return (
-              <div key={p.program_id} className="card" style={{ marginBottom: 0 }}>
-                <div className="flex items-start justify-between gap-2">
-                  <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-white ${tileBg}`}>
-                    <StageIcon size={20} />
-                  </div>
-                  <div className="flex flex-wrap justify-end gap-1">
-                    {p.program_type === 'SYSTEM' && <span className="pill">โปรแกรมกลาง</span>}
-                    {p.status === 'INACTIVE' && <span className="pill pill-rose">ปิดใช้งาน</span>}
-                  </div>
-                </div>
-                <div className="mt-3 text-[13.5px] font-bold text-dash-text">{p.program_name}</div>
-                <div className="mt-1">
-                  {p.target_stage ? (
-                    <span className={`pill ${STAGE_PILL[p.target_stage]}`}>{STAGE_LABEL[p.target_stage]}</span>
-                  ) : (
-                    <span className="pill pill-blue">ทุกระยะ</span>
-                  )}
-                </div>
-                <div className="patient-meta mt-2">
-                  {p.repeat_count} ครั้ง/เซต · {p.session_per_day} เซต/วัน · {Math.round(p.duration_sec / 60)} นาที/ครั้ง
-                </div>
-                {p.description && <div className="patient-meta mt-1">{p.description}</div>}
-                {p.created_by === usersId && (
-                  <div className="patient-actions mt-3" style={{ flexWrap: 'wrap' }}>
-                    <button className="btn btn-ghost btn-sm" disabled={busyId === p.program_id} onClick={() => startEdit(p)}>แก้ไข</button>
-                    <button className="btn btn-ghost btn-sm" disabled={busyId === p.program_id} onClick={() => toggleStatus(p)}>
-                      {p.status === 'ACTIVE' ? 'ปิดใช้งาน' : 'เปิดใช้งาน'}
-                    </button>
-                    <button className="btn btn-ghost btn-sm" disabled={busyId === p.program_id} onClick={() => removeProgram(p)}>ลบ</button>
-                  </div>
-                )}
-              </div>
-            )
-          })}
+      {form && (
+        <div className="flex flex-col gap-3.5 rounded-lg border-[1.5px] border-rx-tint-2 bg-white px-5 py-[18px]">
+          <span className="text-[16px] font-semibold">สร้างโปรแกรมใหม่</span>
+          <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
+            <Field label="ชื่อโปรแกรม" htmlFor="pn" className="sm:col-span-2"><input id="pn" className={inputCls} value={form.programName} onChange={setF('programName')} /></Field>
+            <Field label="วิธีฝึก" htmlFor="pd" className="sm:col-span-2"><textarea id="pd" rows={2} className={textareaCls} value={form.description} onChange={setF('description')} placeholder="เช่น ดันกระดานไปข้างหน้าแล้วดึงกลับ เน้นเคลื่อนให้สุดระยะ" /></Field>
+            <Field label="เหมาะกับระยะ" htmlFor="ps">
+              <select id="ps" className={selectCls} value={form.targetStage} onChange={setF('targetStage')}>{STAGES.map(s => <option key={s} value={s}>{STAGE_LABEL[s]}</option>)}</select>
+            </Field>
+            <div className="grid grid-cols-2 gap-3.5">
+              <Field label="เซต/วัน" htmlFor="pset"><input id="pset" type="number" min={1} className={inputCls} value={form.sessionPerDay} onChange={setF('sessionPerDay')} /></Field>
+              <Field label="นาที" htmlFor="pmin"><input id="pmin" type="number" min={1} className={inputCls} value={form.durationMin} onChange={setF('durationMin')} /></Field>
+            </div>
+          </div>
+          <span className="text-[12px] text-rx-muted">ไม่มีจำนวนครั้งขั้นต่ำ ผู้ป่วยทำได้เท่าไหร่บันทึกตามนั้น</span>
+          <div className="flex justify-end gap-2.5">
+            <Btn variant="outline" onClick={() => setForm(null)}>ยกเลิก</Btn>
+            <Btn onClick={save} disabled={saving}>{saving ? 'กำลังบันทึก...' : 'บันทึกโปรแกรม'}</Btn>
+          </div>
         </div>
       )}
+
+      {assign && (
+        <div className="flex flex-col gap-3 rounded-lg border-[1.5px] border-rx-tint-2 bg-white px-5 py-[18px]">
+          <span className="text-[16px] font-semibold">มอบ "{assign.program_name}" ให้ผู้ป่วย</span>
+          <div className="flex flex-wrap items-end gap-3">
+            <Field label="ผู้ป่วย (เคสของฉัน)" htmlFor="asp" className="flex-[1_1_280px]">
+              <select id="asp" className={selectCls} value={assignTo} onChange={e => setAssignTo(e.target.value)}>
+                <option value="">เลือกผู้ป่วย</option>
+                {cases.map(p => <option key={p.patient_id} value={p.patient_id}>{fullName(p.first_name, p.last_name)} · HN {p.patient_id} · {stageLabel(p.current_stage)}</option>)}
+              </select>
+            </Field>
+            <Btn variant="outline" onClick={() => setAssign(null)}>ยกเลิก</Btn>
+            <Btn onClick={doAssign} disabled={!assignTo || saving}>มอบโปรแกรม</Btn>
+          </div>
+          <span className="text-[12px] text-rx-muted">โปรแกรมนี้จะแทนโปรแกรมเดิมของผู้ป่วย</span>
+        </div>
+      )}
+
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(280px,1fr))] items-start gap-4">
+        {shown.map(p => (
+          <div key={p.program_id} className={`flex min-w-0 flex-col gap-3 rounded-lg border border-white bg-white px-[18px] py-4`}>
+            <div className="flex items-start justify-between gap-2">
+              <span className="text-[16px] font-semibold">{p.program_name}</span>
+              <Badge label={stageLabel(p.target_stage)} bg="#EDEEFC" fg="#3A40C9" />
+            </div>
+            {p.description && <span className="text-[13px] leading-relaxed text-rx-muted">{p.description}</span>}
+            <div className="flex flex-wrap gap-1.5">
+              <Chip>{p.session_per_day} เซต/วัน</Chip>
+              <Chip>{Math.round(p.duration_sec / 60)} นาที</Chip>
+            </div>
+            <div className="flex items-center justify-between gap-2 border-t border-rx-divider pt-2.5">
+              <span className="text-[12px] text-rx-muted">ใช้กับผู้ป่วย {p.patient_count ?? 0} คน</span>
+              {isPt && <Btn variant="outline" size="sm" onClick={() => { setAssign(p); setForm(null); setAssignTo(''); setMsg('') }}>มอบให้ผู้ป่วย</Btn>}
+            </div>
+          </div>
+        ))}
+      </div>
+      {shown.length === 0 && <div className="rounded-lg bg-white px-5 py-6 text-[14px] text-rx-muted">ยังไม่มีโปรแกรมในคลัง</div>}
     </>
   )
 }

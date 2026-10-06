@@ -16,13 +16,11 @@ export const programs = pgTable("programs", {
 
   description: text("description"),
 
-  repeat_count: integer("repeat_count").notNull(),
-
   program_type: varchar("program_type", {
     length: 20,
   }).notNull(), // SYSTEM | CUSTOM
 
-  // ระยะอาการของโรคที่โปรแกรมนี้ออกแบบมาให้ — FLACCID | SPASTIC | RECOVERY, null = ใช้ได้ทุกระยะ
+  // ระยะอาการของโรคที่โปรแกรมนี้ออกแบบมาให้ — EARLY | MIDDLE | LATE, null = ใช้ได้ทุกระยะ
   target_stage: varchar("target_stage", { length: 20 }),
 
   session_per_day: integer("session_per_day").notNull(),

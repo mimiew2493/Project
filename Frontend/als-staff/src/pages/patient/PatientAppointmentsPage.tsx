@@ -1,18 +1,16 @@
 import { useEffect, useState } from 'react'
+import { CalendarDays } from 'lucide-react'
 import type { PatientAppointment } from '../../types'
-import { Wrench } from 'lucide-react'
-import { API_BASE } from '../../config'
+import { list, startOfDay, sameDay, DOW, MON, hhmm, ptName, isTraining } from '../../lib/clinic'
 
 interface Props { patientId: string }
 
-const fmt = (iso: string) => new Date(iso).toLocaleString('th-TH', { dateStyle: 'medium', timeStyle: 'short' })
+const dayLabel = (d: Date) => `${DOW[d.getDay()]} ${d.getDate()} ${MON[d.getMonth()]}`
 
-const STATUS: Record<string, { label: string; cls: string }> = {
-  SCHEDULED: { label: 'ยืนยันแล้ว', cls: 'bg-[#E6F7EF] text-[#1E9E6B]' },
-  PROPOSED: { label: 'รอยืนยัน', cls: 'bg-[#FFF3DC] text-[#C9820E]' },
-  COMPLETED: { label: 'เสร็จสิ้น', cls: 'bg-[#EFEDF7] text-[#62677D]' },
-  CANCELLED: { label: 'ยกเลิก', cls: 'bg-[#FBE9EE] text-[#C43D5C]' },
-  NO_SHOW: { label: 'ไม่มาตามนัด', cls: 'bg-[#FBE9EE] text-[#C43D5C]' },
+const PAST_BADGE: Record<string, [string, string, string]> = {
+  COMPLETED: ['มาแล้ว', '#E4F5EC', '#145C38'],
+  NO_SHOW: ['ไม่มา', '#FCEBEB', '#791F1F'],
+  SCHEDULED: ['ไม่มา', '#FCEBEB', '#791F1F'],
 }
 
 export default function PatientAppointmentsPage({ patientId }: Props) {
@@ -20,53 +18,67 @@ export default function PatientAppointmentsPage({ patientId }: Props) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    fetch(`${API_BASE}/api/appointments?patient_id=${patientId}`)
-      .then(r => r.json())
-      .then(d => { if (Array.isArray(d)) setAppts(d) })
-      .catch(() => {})
-      .finally(() => setLoading(false))
+    list<PatientAppointment>(`/api/appointments?patient_id=${patientId}`).then(setAppts).finally(() => setLoading(false))
   }, [patientId])
 
-  if (loading) return <div className="py-16 text-center text-[12px] text-[#82869C]">กำลังโหลด...</div>
+  if (loading) return <div className="py-16 text-center text-[13px] text-pt-muted">กำลังโหลด...</div>
 
-  const sorted = [...appts].sort((a, b) => b.appointment_date.localeCompare(a.appointment_date))
+  const now = new Date()
+  const today = startOfDay(now)
+  // นัดที่ยังไม่จบ (วันนี้ที่ยังไม่เสร็จ หรือวันข้างหน้า)
+  const upcoming = appts
+    .filter(a => ['SCHEDULED', 'CHECKED_IN', 'IN_PROGRESS'].includes(a.status) && new Date(a.appointment_date) >= today)
+    .sort((a, b) => a.appointment_date.localeCompare(b.appointment_date))
+  const past = appts
+    .filter(a => !upcoming.includes(a) && a.status !== 'CANCELLED')
+    .sort((a, b) => b.appointment_date.localeCompare(a.appointment_date))
+  const [next, ...rest] = upcoming
+  const nd = next ? new Date(next.appointment_date) : null
+
+  const row = (a: PatientAppointment, badge: [string, string, string]) => {
+    const d = new Date(a.appointment_date)
+    return (
+      <div key={a.appointment_id} className="flex items-center gap-3 border-t border-pt-divider py-2.5">
+        <CalendarDays size={20} className="text-pt-muted" />
+        <div className="flex flex-1 flex-col">
+          <span className="text-[15px] font-semibold">{dayLabel(d)}</span>
+          <span className="text-[12px] text-pt-muted">{hhmm(d)} น. · {ptName(a.therapist_name)}</span>
+        </div>
+        <span className="self-start whitespace-nowrap rounded-full px-3 py-[3px] text-[12px] font-semibold" style={{ background: badge[1], color: badge[2] }}>{badge[0]}</span>
+      </div>
+    )
+  }
 
   return (
-    <div className="space-y-3">
-      <div className="px-0.5">
-        <h1 className="text-[15px] font-extrabold text-[#1B1E2C]">นัดหมายของฉัน</h1>
-        <p className="mt-[3px] text-[11px] text-[#82869C]">ประวัตินัดหมายทั้งหมด {sorted.length} ครั้ง</p>
+    <div className="flex flex-col gap-3.5">
+      <div className="flex flex-col">
+        <span className="text-[21px] font-bold">นัดหมาย</span>
+        <span className="text-[13px] text-pt-muted">นัดทั้งหมดของคุณ</span>
       </div>
 
-      {sorted.length === 0 ? (
-        <div className="pg-card px-5 py-10 text-center text-[13px] font-bold text-[#1B1E2C]">ยังไม่มีนัดหมาย</div>
+      {next && nd ? (
+        <div className="flex flex-col gap-1 rounded-2xl bg-pt-tint p-4">
+          <span className="text-[12px] font-semibold text-pt-accent-ink">นัดถัดไป</span>
+          <span className="text-[22px] font-bold text-[#5C2408]">{sameDay(nd, today) ? 'วันนี้' : dayLabel(nd)} {hhmm(nd)} น.</span>
+          <span className="text-[14px] text-[#712B13]">{ptName(next.therapist_name)} · {isTraining(next) ? 'ฝึกกับกระดาน' : 'ประเมินแรกรับ'}</span>
+          <span className="mt-1 text-[12px] text-[#712B13]">มาถึงแล้วแจ้งชื่อหรือ HN ที่เคาน์เตอร์</span>
+        </div>
       ) : (
-        sorted.map(a => {
-          const st = STATUS[a.status] ?? { label: a.status, cls: 'bg-[#EFEDF7] text-[#62677D]' }
-          const side = a.treated_side ?? a.affected_side
-          return (
-            <div key={a.appointment_id} className="pg-card p-4">
-              <div className="flex items-start justify-between gap-2">
-                <div>
-                  <div className="font-mono text-[13px] font-bold text-[#1B1E2C]">{fmt(a.appointment_date)}</div>
-                  <div className="mt-1 text-[11px] leading-relaxed text-[#82869C]">
-                    {a.therapist_name ? `กภ.${a.therapist_name}` : 'ยังไม่มอบหมายนักกายภาพ'} · {a.duration_min} นาที
-                  </div>
-                </div>
-                <span className={`shrink-0 rounded-full px-2.5 py-[3px] text-[10.5px] font-bold ${st.cls}`}>{st.label}</span>
-              </div>
-              {(side || a.device_id) && (
-                <div className="mt-2 flex items-center gap-2">
-                  {side && <span className="rounded-full bg-[#F1ECFC] px-2 py-[3px] text-[9.5px] font-bold text-[#7350C7]">{side}</span>}
-                  {a.device_id && (
-                    <span className="inline-flex items-center gap-1 text-[10.5px] text-[#82869C]"><Wrench size={11} /> {a.device_id}</span>
-                  )}
-                </div>
-              )}
-              {a.note && <div className="mt-1.5 text-[11px] text-[#82869C]">{a.note}</div>}
-            </div>
-          )
-        })
+        <div className="rounded-2xl bg-white p-4 text-[14px] text-pt-muted">ยังไม่มีนัดครั้งถัดไป · นักกายภาพจะลงนัดให้หลังการฝึก</div>
+      )}
+
+      {rest.length > 0 && (
+        <div className="flex flex-col rounded-2xl bg-white px-4 py-3.5">
+          <span className="text-[14px] font-semibold">นัดที่จะถึง</span>
+          {rest.map(a => row(a, ['นัด', '#FBE7DC', '#A8430F']))}
+        </div>
+      )}
+
+      {past.length > 0 && (
+        <div className="flex flex-col rounded-2xl bg-white px-4 py-3.5">
+          <span className="text-[14px] font-semibold">ที่ผ่านมา</span>
+          {past.map(a => row(a, PAST_BADGE[a.status] ?? PAST_BADGE.COMPLETED))}
+        </div>
       )}
     </div>
   )

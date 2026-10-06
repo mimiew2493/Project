@@ -24,11 +24,16 @@ async function seed() {
   ON CONFLICT DO NOTHING`
   console.log('✅ Users created')
 
-  // 3. สร้าง Patients
-  await sql`INSERT INTO patients (patient_id, users_id, medical_condition, weight, address) VALUES
-    ('P001', 'U001', 'ALS ระยะแรก (Flaccid)', 65.50, '123 ถ.สุขุมวิท กรุงเทพ'),
-    ('P002', 'U002', 'ALS ระยะเกร็ง (Spastic)', 52.00, '456 ถ.พหลโยธิน กรุงเทพ'),
-    ('P003', 'U003', 'ALS ระยะฟื้นตัว (Recovery)', 70.30, '789 ถ.รัชดา กรุงเทพ')
+  // 3. สร้าง Patients (ข้อมูลประจำตัว) + เคสการรักษา (ข้อมูลทางคลินิกอยู่ใน treatment_cases)
+  await sql`INSERT INTO patients (patient_id, users_id, address) VALUES
+    ('P001', 'U001', '123 ถ.สุขุมวิท กรุงเทพ'),
+    ('P002', 'U002', '456 ถ.พหลโยธิน กรุงเทพ'),
+    ('P003', 'U003', '789 ถ.รัชดา กรุงเทพ')
+  ON CONFLICT DO NOTHING`
+  await sql`INSERT INTO treatment_cases (case_id, patient_id, primary_ot_id, status, current_stage, start_stage) VALUES
+    ('CASE-P001', 'P001', NULL, 'PENDING_ASSESSMENT', NULL, NULL),
+    ('CASE-P002', 'P002', NULL, 'PENDING_ASSESSMENT', NULL, NULL),
+    ('CASE-P003', 'P003', NULL, 'PENDING_ASSESSMENT', NULL, NULL)
   ON CONFLICT DO NOTHING`
   console.log('✅ Patients created')
 

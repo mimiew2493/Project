@@ -4,6 +4,8 @@ import {
   integer,
   decimal,
   timestamp,
+  real,
+  text,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 
@@ -51,6 +53,16 @@ export const devices = pgTable("devices", {
 
   // คำสั่งจากแอปที่รอให้อุปกรณ์มารับตอนส่ง telemetry ครั้งถัดไป
   pending_command: varchar("pending_command", { length: 20 }), // START | STOP | null
+
+  // นัดที่เครื่องผูกอยู่ตอนนี้ — trigger appt_bind_device เขียน/ล้างให้ตามสถานะนัด (IN_PROGRESS)
+  // บอร์ดไม่ต้องรู้ว่าวัดใคร ฐานข้อมูลโยงจากนัดไปหาผู้ป่วยเอง
+  current_appointment_id: varchar("current_appointment_id"),
+  holder_patient_id: varchar("holder_patient_id", { length: 50 }),
+
+  live_angle: real("live_angle"),
+  live_phase: varchar("live_phase", { length: 10 }),
+
+  api_key: text("api_key").unique(),
 
   created_at: timestamp("created_at")
     .defaultNow()

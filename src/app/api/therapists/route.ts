@@ -1,16 +1,17 @@
 import { db } from '@/src/db'
 import { users } from '@/src/db/schema/users'
 import { occupationalTherapists } from '@/src/db/schema/occupationalTherapist'
-import { appointments } from '@/src/db/schema/appointments'
+import { treatmentCases } from '@/src/db/schema/treatmentCases'
 import { NextResponse } from 'next/server'
-import { eq, countDistinct } from 'drizzle-orm'
+import { requireViewer, authFail, assertOwnPatient, ROLE } from '@/src/utils/auth'
+import { and, eq, ne, countDistinct } from 'drizzle-orm'
 import { DEFAULT_PASSWORD, hashPassword } from '@/src/utils/password'
 import { pgErrorCode } from '@/src/utils/db-error'
 
 const cors = {
   'Access-Control-Allow-Origin': process.env.ALLOWED_ORIGIN || 'http://localhost:5173',
   'Access-Control-Allow-Methods': 'GET, POST, PATCH, DELETE',
-  'Access-Control-Allow-Headers': 'Content-Type',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Device-Key',
 }
 
 export async function OPTIONS() {
@@ -18,8 +19,9 @@ export async function OPTIONS() {
 }
 
 // GET /api/therapists — ดึงรายชื่อนักกายภาพ + จำนวนเคส
-export async function GET() {
+export async function GET(req: Request) {
   try {
+    const viewer = requireViewer(req)
     const result = await db
       .select({
         ot_id: occupationalTherapists.ot_id,
@@ -28,15 +30,18 @@ export async function GET() {
         first_name: users.first_name,
         last_name: users.last_name,
         phone: users.phone,
-        cases: countDistinct(appointments.patient_id),
+        cases: countDistinct(treatmentCases.case_id),
       })
       .from(occupationalTherapists)
       .innerJoin(users, eq(occupationalTherapists.users_id, users.users_id))
-      .leftJoin(appointments, eq(appointments.ot_id, occupationalTherapists.ot_id))
+      // จำนวนเคสที่ยังไม่ปิดที่เป็นนักกายภาพประจำเคส
+      .leftJoin(treatmentCases, and(eq(treatmentCases.primary_ot_id, occupationalTherapists.ot_id), ne(treatmentCases.status, 'CLOSED')))
       .groupBy(occupationalTherapists.ot_id, users.users_id)
 
     return NextResponse.json(result, { headers: cors })
   } catch (error: any) {
+    const denied = authFail(error, cors)
+    if (denied) return denied
     if (pgErrorCode(error) === '23505') {
       return NextResponse.json({ error: 'ข้อมูลนี้ซ้ำกับที่มีอยู่ในระบบแล้ว (เช่น เบอร์โทรหรืออีเมล)' }, { status: 409, headers: cors })
     }
@@ -47,6 +52,7 @@ export async function GET() {
 // POST /api/therapists — เพิ่มนักกายภาพใหม่
 export async function POST(req: Request) {
   try {
+    const viewer = requireViewer(req, ROLE.RECORDS)
     const body = await req.json()
     const timestamp = Date.now().toString().slice(-6)
     const usersId = `U${timestamp}`
@@ -88,6 +94,8 @@ export async function POST(req: Request) {
     }, { status: 201, headers: cors })
 
   } catch (error: any) {
+    const denied = authFail(error, cors)
+    if (denied) return denied
     if (pgErrorCode(error) === '23505') {
       return NextResponse.json({ error: 'ข้อมูลนี้ซ้ำกับที่มีอยู่ในระบบแล้ว (เช่น เบอร์โทรหรืออีเมล)' }, { status: 409, headers: cors })
     }
@@ -98,6 +106,7 @@ export async function POST(req: Request) {
 // PATCH /api/therapists — แก้ไขข้อมูลนักกายภาพ
 export async function PATCH(req: Request) {
   try {
+    const viewer = requireViewer(req, ROLE.RECORDS)
     const body = await req.json()
     if (!body.otId || !body.usersId) {
       return NextResponse.json({ error: 'ต้องระบุ otId และ usersId' }, { status: 400, headers: cors })
@@ -123,6 +132,8 @@ export async function PATCH(req: Request) {
 
     return NextResponse.json({ message: 'แก้ไขข้อมูลนักกายภาพสำเร็จ' }, { headers: cors })
   } catch (error: any) {
+    const denied = authFail(error, cors)
+    if (denied) return denied
     if (pgErrorCode(error) === '23505') {
       return NextResponse.json({ error: 'ข้อมูลนี้ซ้ำกับที่มีอยู่ในระบบแล้ว (เช่น เบอร์โทรหรืออีเมล)' }, { status: 409, headers: cors })
     }
@@ -133,6 +144,7 @@ export async function PATCH(req: Request) {
 // DELETE /api/therapists?ot_id=OT000001 → ลบนักกายภาพ (ลบ users ต้นทาง cascade ไปที่ occupational_therapists)
 export async function DELETE(req: Request) {
   try {
+    const viewer = requireViewer(req, ROLE.RECORDS)
     const otId = new URL(req.url).searchParams.get('ot_id')
     if (!otId) {
       return NextResponse.json({ error: 'ต้องระบุ ot_id' }, { status: 400, headers: cors })
@@ -150,6 +162,8 @@ export async function DELETE(req: Request) {
 
     return NextResponse.json({ message: 'ลบนักกายภาพสำเร็จ' }, { headers: cors })
   } catch (error: any) {
+    const denied = authFail(error, cors)
+    if (denied) return denied
     if (pgErrorCode(error) === '23505') {
       return NextResponse.json({ error: 'ข้อมูลนี้ซ้ำกับที่มีอยู่ในระบบแล้ว (เช่น เบอร์โทรหรืออีเมล)' }, { status: 409, headers: cors })
     }

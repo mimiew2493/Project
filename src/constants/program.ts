@@ -9,7 +9,7 @@ export const PROGRAM_STATUS = {
 } as const;
 
 export const TARGET_STAGE = {
-  FLACCID: "FLACCID",
-  SPASTIC: "SPASTIC",
-  RECOVERY: "RECOVERY",
+  EARLY: "EARLY",
+  MIDDLE: "MIDDLE",
+  LATE: "LATE",
 } as const;

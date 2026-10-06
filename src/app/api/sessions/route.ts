@@ -3,37 +3,45 @@ import { therapySessions } from '@/src/db/schema/therapySession'
 import { patientPrograms } from '@/src/db/schema/patientProgram'
 import { programs } from '@/src/db/schema/program'
 import { movementData } from '@/src/db/schema/movementData'
-import { appointments } from '@/src/db/schema/appointments'
-import { eq, and, desc, sum, isNotNull } from 'drizzle-orm'
+import { eq, desc, sum } from 'drizzle-orm'
 import { NextResponse } from 'next/server'
+import { requireViewer, authFail, assertOwnPatient, ROLE } from '@/src/utils/auth'
 
 const cors = {
   'Access-Control-Allow-Origin': process.env.ALLOWED_ORIGIN || 'http://localhost:5173',
-  'Access-Control-Allow-Methods': 'GET, POST',
-  'Access-Control-Allow-Headers': 'Content-Type',
+  'Access-Control-Allow-Methods': 'GET, PATCH',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Device-Key',
 }
 
 export async function OPTIONS() {
   return new NextResponse(null, { status: 200, headers: cors })
 }
 
-// GET /api/sessions?patient_id=PAT000001 → ประวัติการฝึกจริงของผู้ป่วย (ตาราง therapy_sessions + movement_data)
-// GET /api/sessions?ot_id=OT000001       → ทุกเซสชันที่ฝึกภายใต้โปรแกรมที่นักกายภาพคนนี้มอบหมาย (สรุปผลงานของตัวเอง)
+// GET /api/sessions?patient_id=PAT000001 → ผลรายเซตของผู้ป่วย (ล่าสุดก่อน)
+// GET /api/sessions?ot_id=OT000001       → ทุกเซตภายใต้โปรแกรมที่นักกายภาพคนนี้มอบหมาย
+// เซตเกิดจากกระดานเท่านั้น (POST /api/devices/telemetry) — ฐานข้อมูลรับเฉพาะนัดที่กำลังฝึกอยู่
 export async function GET(req: Request) {
   try {
-    const patientId = new URL(req.url).searchParams.get('patient_id')
-    const otId = new URL(req.url).searchParams.get('ot_id')
+    const viewer = requireViewer(req)
+    const params = new URL(req.url).searchParams
+    // ผู้ป่วยเห็นเฉพาะผลของตัวเอง · ดูตามนักกายภาพได้เฉพาะนักกายภาพ
+    const patientId = viewer.role_id === ROLE.PATIENT ? viewer.patient_id : params.get('patient_id')
+    const otId = viewer.role_id === ROLE.THERAPIST ? params.get('ot_id') : null
     if (!patientId && !otId) {
       return NextResponse.json({ error: 'ต้องระบุ patient_id หรือ ot_id' }, { status: 400, headers: cors })
     }
 
-    const query = db
+    const rows = await db
       .select({
         session_id: therapySessions.session_id,
         session_date: therapySessions.session_date,
         duration_sec: therapySessions.duration_sec,
         total_reps: therapySessions.total_reps,
         status: therapySessions.status,
+        set_number: therapySessions.set_number,
+        fatigue_level: therapySessions.fatigue_level,
+        patient_comment: therapySessions.patient_comment,
+        appointment_id: therapySessions.appointment_id,
         program_id: programs.program_id,
         program_name: programs.program_name,
         patient_id: patientPrograms.patient_id,
@@ -43,80 +51,48 @@ export async function GET(req: Request) {
       .innerJoin(patientPrograms, eq(therapySessions.patient_program_id, patientPrograms.patient_program_id))
       .innerJoin(programs, eq(patientPrograms.program_id, programs.program_id))
       .leftJoin(movementData, eq(movementData.session_id, therapySessions.session_id))
-
-    const rows = await query
       .where(patientId ? eq(patientPrograms.patient_id, patientId) : eq(patientPrograms.assigned_by, otId!))
       .groupBy(therapySessions.session_id, programs.program_id, patientPrograms.patient_id)
       .orderBy(desc(therapySessions.session_date))
 
     return NextResponse.json(rows, { headers: cors })
   } catch (error: any) {
+    const denied = authFail(error, cors)
+    if (denied) return denied
     return NextResponse.json({ error: error.message }, { status: 500, headers: cors })
   }
 }
 
-// POST /api/sessions → นักกายภาพบันทึกผลการฝึกจริงให้ผู้ป่วย (ต้องมีโปรแกรมที่กำหนดให้ผู้ป่วยไว้แล้ว)
-export async function POST(req: Request) {
+// PATCH /api/sessions → ผู้ป่วยให้คะแนนความเหนื่อยหลังจบเซต { sessionId, fatigueLevel: 1–5, comment? }
+export async function PATCH(req: Request) {
   try {
+    const viewer = requireViewer(req, ROLE.PATIENT, ROLE.THERAPIST)
     const body = await req.json()
-    if (!body.patientId || !body.otId || !body.usersId || !body.durationMin || body.totalReps === undefined) {
-      return NextResponse.json({ error: 'ข้อมูลไม่ครบ ต้องระบุ patientId, otId, usersId, durationMin, totalReps' }, { status: 400, headers: cors })
+    const level = Number(body.fatigueLevel)
+    if (!body.sessionId || !Number.isInteger(level) || level < 1 || level > 5) {
+      return NextResponse.json({ error: 'ต้องระบุ sessionId และ fatigueLevel (1–5)' }, { status: 400, headers: cors })
     }
-
-    const durationSec = Math.round(Number(body.durationMin) * 60)
-
-    // ต้องมีโปรแกรมการฝึก (ACTIVE) ที่กำหนดให้ผู้ป่วยคนนี้ไว้แล้วก่อนเสมอ — เลือกได้จาก "คลังโปรแกรมฝึก"
-    // (ไม่สร้างโปรแกรมทั่วไปแบบไม่ระบุระยะให้อัตโนมัติอีกต่อไป เพื่อให้ทุกโปรแกรมเชื่อมกับระยะอาการที่ชัดเจน)
-    const [activePp] = await db
-      .select({ patient_program_id: patientPrograms.patient_program_id })
-      .from(patientPrograms)
-      .where(and(eq(patientPrograms.patient_id, body.patientId), eq(patientPrograms.status, 'ACTIVE')))
-      .orderBy(desc(patientPrograms.assigned_date))
-    if (!activePp) {
-      return NextResponse.json(
-        { error: 'ยังไม่ได้กำหนดโปรแกรมการฝึกให้ผู้ป่วยคนนี้ กรุณาเลือกโปรแกรมจากคลังโปรแกรมฝึกก่อนบันทึกผล' },
-        { status: 400, headers: cors }
-      )
+    // ผู้ป่วยให้คะแนนได้เฉพาะเซตของตัวเอง
+    if (viewer.role_id === ROLE.PATIENT) {
+      const [own] = await db.select({ patient_id: patientPrograms.patient_id }).from(therapySessions)
+        .innerJoin(patientPrograms, eq(therapySessions.patient_program_id, patientPrograms.patient_program_id))
+        .where(eq(therapySessions.session_id, body.sessionId))
+      assertOwnPatient(viewer, own?.patient_id)
     }
-    const patientProgramId = activePp.patient_program_id
-
-    const result = await db.transaction(async (tx) => {
-      const sessionId = `TS${Date.now().toString().slice(-6)}`
-      const sessionDate = body.sessionDate ? new Date(body.sessionDate) : new Date()
-      await tx.insert(therapySessions).values({
-        session_id: sessionId,
-        patient_program_id: patientProgramId,
-        session_date: sessionDate,
-        duration_sec: durationSec,
-        total_reps: Number(body.totalReps),
-        status: 'COMPLETED',
-      })
-
-      // จำลองข้อมูลที่อุปกรณ์ IoT ของผู้ป่วยส่งเข้ามาระหว่างฝึก (ยังไม่มีอุปกรณ์จริงส่งข้อมูลเข้าระบบ)
-      // ใช้อุปกรณ์จากนัดหมายล่าสุดของผู้ป่วยที่มีการมอบหมายอุปกรณ์ไว้ ถ้ามี
-      const [deviceAppt] = await tx
-        .select({ device_id: appointments.device_id })
-        .from(appointments)
-        .where(and(eq(appointments.patient_id, body.patientId), isNotNull(appointments.device_id)))
-        .orderBy(desc(appointments.appointment_date))
-        .limit(1)
-
-      if (deviceAppt?.device_id) {
-        await tx.insert(movementData).values({
-          movement_id: `MV${Date.now().toString().slice(-6)}`,
-          session_id: sessionId,
-          device_id: deviceAppt.device_id,
-          movement_count: Number(body.totalReps),
-          movement_distance: (Number(body.totalReps) * 0.35).toFixed(2),
-          recorded_at: sessionDate,
-        })
-      }
-
-      return { sessionId }
-    })
-
-    return NextResponse.json({ message: 'บันทึกผลการฝึกสำเร็จ', session_id: result.sessionId }, { status: 201, headers: cors })
+    const patch: Record<string, unknown> = { fatigue_level: level }
+    if (body.comment !== undefined) patch.patient_comment = body.comment || null
+    const updated = await db
+      .update(therapySessions)
+      .set(patch)
+      .where(eq(therapySessions.session_id, body.sessionId))
+      .returning({ session_id: therapySessions.session_id })
+    if (updated.length === 0) {
+      return NextResponse.json({ error: 'ไม่พบเซตการฝึกนี้' }, { status: 404, headers: cors })
+    }
+    return NextResponse.json({ message: 'บันทึกความเหนื่อยสำเร็จ' }, { headers: cors })
   } catch (error: any) {
+    const denied = authFail(error, cors)
+    if (denied) return denied
     return NextResponse.json({ error: error.message }, { status: 500, headers: cors })
   }
 }
