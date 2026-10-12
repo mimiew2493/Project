@@ -31,7 +31,7 @@ export async function GET(req: Request) {
       from skateboard_sessions
       where patient_id = ${patientId}
       order by created_at desc
-      limit 100
+      limit 2000
     `);
 
     // postgres-js คืนเป็น array, node-postgres คืนเป็น { rows }

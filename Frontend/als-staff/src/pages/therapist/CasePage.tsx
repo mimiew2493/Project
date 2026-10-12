@@ -1,11 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { CalendarClock, Check, Lock } from "lucide-react";
 import type {
   AppointmentRequest,
   AuthUser,
   PatientAppointment,
   Program,
-  TherapySession,
 } from "../../types";
 import {
   NextApptFields,
@@ -19,18 +18,14 @@ import {
   list,
   slotLabel,
   apptSlot,
-  addDays,
   startOfDay,
   sameDay,
   thaiDate,
-  dayMonth,
   hhmm,
   isTraining,
   holdsSlot,
   queueState,
   BADGE,
-  setsOfVisit,
-  avg,
   stageLabel,
   ptName,
   effectiveSoap,
@@ -38,8 +33,13 @@ import {
   SOAP_LABEL,
 } from "../../lib/clinic";
 import { PatientHeader, VisitCard } from "../../components/VisitHistory";
-import SkateArmProgress from "../../components/SkateArmProgress";
 import { useCase, pastVisits, activePrograms } from "../../lib/useCase";
+import TrainingProgress, {
+  GroupedBars,
+  useRepSets,
+  SIDE_LABEL,
+  type Side,
+} from "../../components/TrainingProgress";
 import {
   BackLink,
   Badge,
@@ -47,7 +47,6 @@ import {
   ErrorText,
   Field,
   Loading,
-  Stat,
   selectCls,
   textareaCls,
 } from "../../components/ui";
@@ -62,10 +61,7 @@ interface Props {
 type Tab = "today" | "progress" | "history";
 // ข้างที่รักษา (ตรงกับข้างที่เป็นโรคในหน้าประเมิน) และข้างของแต่ละเซต
 const SIDE_OPTIONS = ["ข้างซ้าย", "ข้างขวา", "ทั้งสองข้าง"];
-type Side = "LEFT" | "RIGHT";
-const SIDE_LABEL: Record<Side, string> = { LEFT: "ข้างซ้าย", RIGHT: "ข้างขวา" };
 const LIVE_POLL_MS = 3000;
-
 export default function CasePage({
   user,
   patientId,
@@ -246,8 +242,14 @@ function TodayTab({
     return () => clearInterval(t);
   }, [todayAppt?.appointment_id, live]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const affectedSide: Side =
+    todayAppt?.treated_side === "ข้างซ้าย" ||
+    (!todayAppt?.treated_side && patient?.affected_side === "ข้างซ้าย")
+      ? "LEFT"
+      : "RIGHT";
+  const allSets = useRepSets(patient?.patient_id, sessions, affectedSide);
+
   if (!patient) return null;
-  const sets = todayAppt ? setsOfVisit(sessions, todayAppt) : [];
   const saved = !!todayAppt?.soap_saved_at;
   const current = todayAppt ? effectiveSoap(todayAppt, amendments) : null;
   const myAmendments = amendments.filter(
@@ -280,18 +282,15 @@ function TodayTab({
         new Date(a.appointment_date) > new Date(),
     )
     .sort((a, b) => a.appointment_date.localeCompare(b.appointment_date))[0];
-  // แดชบอร์ดครั้งนี้เทียบครั้งก่อน
-  const prevVisits = pastVisits(data.appts)
-    .filter(
-      (v) =>
-        v.status === "COMPLETED" &&
-        v.appointment_id !== todayAppt?.appointment_id,
-    )
-    .slice(0, 5);
-  const visitAvg = (v: PatientAppointment) =>
-    avg(setsOfVisit(sessions, v).map((x) => x.total_reps));
-  const thisAvg = avg(sets.map((x) => x.total_reps));
-  const prevAvg = prevVisits[0] ? visitAvg(prevVisits[0]) : null;
+  // แดชบอร์ดครั้งนี้: เฉพาะเซตที่ทำวันนี้ แยกข้าง
+  const today = new Date();
+  const todaySets = allSets.filter((x) => sameDay(new Date(x.at), today));
+  const todaySides: Side[] = both
+    ? ["LEFT", "RIGHT"]
+    : (["LEFT", "RIGHT"] as Side[]).filter((sd) =>
+        todaySets.some((x) => x.side === sd),
+      );
+  if (!todaySides.length) todaySides.push(nextSide);
 
   const run = async (fn: () => Promise<unknown>, done?: string) => {
     setBusy(true);
@@ -323,147 +322,47 @@ function TodayTab({
       {/* บนลงล่าง: ผลการฝึกครั้งนี้ (เต็มความกว้าง) → บันทึกผลการรักษา */}
       <div className="flex flex-col gap-4">
         <div className="flex min-w-0 flex-col gap-3.5">
-          {/* แดชบอร์ดการฝึกครั้งนี้ และเทียบกับครั้งก่อน ๆ */}
-          <div className="grid grid-cols-1 gap-4 rx-card px-6 py-5 md:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
-            <div className="flex min-w-0 flex-col gap-3">
-              <span className="text-[15px] font-semibold">
-                ผลการฝึกครั้งนี้
+          {/* แดชบอร์ดการฝึกครั้งนี้: เฉพาะที่ทำวันนี้ · แต่ละกลุ่ม = เซตที่ n ของข้างซ้าย/ขวา */}
+          <div className="flex flex-col gap-3 rx-card px-6 py-5">
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <span className="text-[15px] font-semibold">ผลการฝึกครั้งนี้</span>
+              <span className="text-[12px] text-rx-muted">
+                {todaySides
+                  .map((sd) => {
+                    const items = todaySets.filter((x) => x.side === sd);
+                    return `${SIDE_LABEL[sd]} รวม ${items.reduce((n, x) => n + x.reps, 0)} ครั้ง · ${items.length} เซต`;
+                  })
+                  .join("  |  ")}
               </span>
-              {/* ทั้งสองข้าง → กราฟคู่ซ้าย/ขวา · ข้างเดียว → กราฟเดียวของข้างนั้น */}
-              {sets.length ? (
-                <div
-                  className={`grid gap-3 ${both ? "grid-cols-2" : "grid-cols-1"}`}
-                >
-                  {(both ? (["LEFT", "RIGHT"] as Side[]) : [nextSide]).map(
-                    (sd) => {
-                      const items = both
-                        ? sets.filter((x) => x.side === sd)
-                        : sets;
-                      const max = Math.max(...sets.map((x) => x.total_reps), 1);
-                      const total = items.reduce((n, x) => n + x.total_reps, 0);
-                      return (
-                        <div
-                          key={sd}
-                          className="flex min-w-0 flex-col gap-1.5 rounded-lg bg-rx-bg px-3 py-2.5"
-                        >
-                          <div className="flex items-baseline justify-between gap-2">
-                            <span className="text-[13px] font-semibold">
-                              {both ? SIDE_LABEL[sd] : side}
-                            </span>
-                            <span className="text-[12px] text-rx-muted">
-                              รวม{" "}
-                              <span className="text-[15px] font-semibold text-rx-ink">
-                                {total}
-                              </span>{" "}
-                              ครั้ง · {items.length} เซต
-                            </span>
-                          </div>
-                          {items.length ? (
-                            <div className="flex h-[96px] items-end gap-2">
-                              {items.map((x, i) => (
-                                <div
-                                  key={x.session_id}
-                                  className="flex min-w-0 flex-1 flex-col items-center gap-1"
-                                >
-                                  <span className="text-[12px] font-semibold">
-                                    {x.total_reps}
-                                  </span>
-                                  <div
-                                    className="w-full max-w-[34px] rounded-t"
-                                    style={{
-                                      height: `${Math.max(6, (x.total_reps / max) * 60)}px`,
-                                      background:
-                                        sd === "LEFT" && both
-                                          ? "#00A5FF"
-                                          : "#007AFF",
-                                    }}
-                                  />
-                                  <span className="text-[11px] text-rx-muted">
-                                    เซต {i + 1}
-                                  </span>
-                                </div>
-                              ))}
-                            </div>
-                          ) : (
-                            <span className="py-6 text-center text-[12px] text-rx-muted">
-                              ยังไม่มีเซตของข้างนี้
-                            </span>
-                          )}
-                        </div>
-                      );
-                    },
-                  )}
-                </div>
-              ) : (
-                <span className="text-[13px] text-rx-muted">
-                  ยังไม่มีเซตที่บันทึกจากกระดานในครั้งนี้
-                </span>
-              )}
             </div>
-            <div className="flex min-w-0 flex-col gap-3 md:border-l md:border-rx-divider md:pl-5">
-              <div className="grid grid-cols-2 gap-2 text-[13px]">
-                <div className="flex flex-col">
-                  <span className="text-rx-muted">เฉลี่ยครั้งนี้</span>
-                  <span className="text-[16px] font-semibold">
-                    {thisAvg != null ? `${thisAvg.toFixed(1)} ครั้ง/เซต` : "–"}
-                  </span>
-                </div>
-                <div className="flex flex-col">
-                  <span className="text-rx-muted">ครั้งก่อน</span>
-                  <span className="text-[16px] font-semibold">
-                    {prevAvg != null ? `${prevAvg.toFixed(1)}` : "–"}
-                    {prevAvg != null && thisAvg != null && (
-                      <span
-                        className={`ml-1.5 text-[12px] ${thisAvg >= prevAvg ? "text-[#2E8A0B]" : "text-[#A32D2D]"}`}
-                      >
-                        {thisAvg >= prevAvg ? "▲" : "▼"}{" "}
-                        {Math.abs(thisAvg - prevAvg).toFixed(1)}
-                      </span>
-                    )}
-                  </span>
-                </div>
-              </div>
-              {prevVisits.length > 0 &&
-                (() => {
-                  const series = [...prevVisits]
-                    .reverse()
-                    .map((v) => ({
-                      k: v.appointment_id,
-                      l: dayMonth(new Date(v.appointment_date)),
-                      v: visitAvg(v) ?? 0,
-                    }));
-                  if (thisAvg != null)
-                    series.push({ k: "now", l: "วันนี้", v: thisAvg });
-                  const max = Math.max(...series.map((x) => x.v), 1);
-                  return (
-                    <div className="flex flex-col gap-1.5">
-                      <span className="text-[12px] text-rx-muted">
-                        เฉลี่ยต่อเซต {series.length} ครั้งล่าสุด
-                      </span>
-                      <div className="flex h-[70px] items-end gap-1.5">
-                        {series.map((x) => (
-                          <div
-                            key={x.k}
-                            className="flex min-w-0 flex-1 flex-col items-center gap-0.5"
-                          >
-                            <div
-                              className="w-full max-w-[28px] rounded-t"
-                              style={{
-                                height: `${Math.max(4, (x.v / max) * 48)}px`,
-                                background:
-                                  x.k === "now" ? "#007AFF" : "#B3D7FF",
-                              }}
-                            />
-                            <span className="truncate text-[10px] text-rx-muted">
-                              {x.l}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })()}
-            </div>
+            {todaySets.length ? (
+              <GroupedBars
+                sides={todaySides}
+                groups={Array.from(
+                  {
+                    length: Math.max(
+                      ...todaySides.map(
+                        (sd) => todaySets.filter((x) => x.side === sd).length,
+                      ),
+                    ),
+                  },
+                  (_, i) => ({
+                    k: String(i),
+                    l: `เซต ${i + 1}`,
+                    v: Object.fromEntries(
+                      todaySides.map((sd) => [
+                        sd,
+                        todaySets.filter((x) => x.side === sd)[i]?.reps,
+                      ]),
+                    ),
+                  }),
+                )}
+              />
+            ) : (
+              <span className="text-[13px] text-rx-muted">
+                ยังไม่มีเซตที่ฝึกในวันนี้
+              </span>
+            )}
           </div>
         </div>
 
@@ -809,24 +708,7 @@ function AfterCard({
               เวชระเบียนลงนัดแล้ว · ขึ้นในคิวและแอปผู้ป่วยแล้ว
             </span>
           </div>
-          <Btn
-            variant="outline"
-            size="sm"
-            disabled={busy}
-            onClick={() =>
-              run(() =>
-                api("/api/appointments", {
-                  method: "PATCH",
-                  body: {
-                    appointmentId: upcoming.appointment_id,
-                    action: "CANCEL",
-                  },
-                }),
-              )
-            }
-          >
-            ยกเลิกนัดนี้
-          </Btn>
+          {/* นักกายภาพยกเลิกนัดไม่ได้ ระบบไม่รองรับการยกเลิกนัด */}
         </div>
       ) : (
         <>
@@ -891,109 +773,7 @@ function AfterCard({
 /* =========================== พัฒนาการ =========================== */
 
 function ProgressTab({ data }: { data: ReturnType<typeof useCase> }) {
-  const { appts, sessions, patient } = data;
-  const since = addDays(new Date(), -28);
-  const recent = sessions.filter((s) => new Date(s.session_date) >= since);
-  const avgReps = avg(recent.map((s) => s.total_reps));
-  const reps = sessions.reduce((a, s) => a + s.total_reps, 0);
-  const secPerRep = reps
-    ? Math.round(sessions.reduce((a, s) => a + s.duration_sec, 0) / reps)
-    : null;
-  const fat = avg(
-    sessions.map((s) => s.fatigue_level).filter((f): f is number => f != null),
-  );
-
-  const visits = pastVisits(appts)
-    .filter((a) => a.status !== "NO_SHOW")
-    .slice(0, 8)
-    .reverse();
-  const perVisit = visits.map((a) => {
-    const ss: TherapySession[] = setsOfVisit(sessions, a);
-    return {
-      a,
-      reps: avg(ss.map((s) => s.total_reps)),
-      fat: avg(
-        ss.map((s) => s.fatigue_level).filter((f): f is number => f != null),
-      ),
-    };
-  });
-  const mx = Math.max(1, ...perVisit.map((v) => v.reps ?? 0));
-  const label = (d: Date, i: number, arr: unknown[]) =>
-    i === 0 || i === arr.length - 1 ? dayMonth(d) : String(d.getDate());
-
-  return (
-    <>
-      <div className="grid grid-cols-[repeat(auto-fit,minmax(150px,1fr))] gap-3">
-        <Stat
-          label="ครั้งเฉลี่ยต่อเซต (4 สัปดาห์)"
-          value={avgReps != null ? avgReps.toFixed(1) : "–"}
-        />
-        <Stat
-          label="เวลาเฉลี่ยต่อครั้ง"
-          value={secPerRep != null ? `${secPerRep} วิ` : "–"}
-        />
-        <Stat
-          label="ความเหนื่อยเฉลี่ย"
-          value={fat != null ? `${fat.toFixed(1)} / 5` : "–"}
-        />
-      </div>
-      <div className="flex flex-wrap items-start gap-4">
-        <div className="flex min-w-0 flex-[3_1_420px] flex-col gap-3 rx-card px-[18px] py-4">
-          <div className="flex items-center justify-between gap-2">
-            <span className="text-[15px] font-semibold">จำนวนครั้ง</span>
-            <span className="text-[12px] text-rx-muted">
-              ครั้งต่อเซต · ต่อการมาแต่ละครั้ง
-            </span>
-          </div>
-          {perVisit.length === 0 ? (
-            <span className="text-[14px] text-rx-muted">ยังไม่มีผลการฝึก</span>
-          ) : (
-            <>
-              <div
-                className="grid h-[170px] items-end gap-2.5 border-b border-rx-soft"
-                style={{
-                  gridTemplateColumns: `repeat(${perVisit.length}, minmax(0,1fr))`,
-                }}
-              >
-                {perVisit.map((v, i) => (
-                  <div
-                    key={v.a.appointment_id}
-                    className="flex flex-col items-center gap-1"
-                  >
-                    <span className="text-[12px] text-rx-muted">
-                      {v.reps != null ? Math.round(v.reps * 10) / 10 : ""}
-                    </span>
-                    <div
-                      className="w-full rounded-t-md"
-                      style={{
-                        height: Math.round(((v.reps ?? 0) / mx) * 140),
-                        background:
-                          i === perVisit.length - 1 ? "#007AFF" : "#B3D7FF",
-                      }}
-                    />
-                  </div>
-                ))}
-              </div>
-              <div
-                className="grid gap-2.5 text-center text-[12px] text-rx-muted"
-                style={{
-                  gridTemplateColumns: `repeat(${perVisit.length}, minmax(0,1fr))`,
-                }}
-              >
-                {perVisit.map((v, i, arr) => (
-                  <span key={v.a.appointment_id}>
-                    {label(new Date(v.a.appointment_date), i, arr)}
-                  </span>
-                ))}
-              </div>
-            </>
-          )}
-        </div>
-      </div>
-      {/* ผลจากเครื่องฝึก แยกแขนซ้าย/ขวา (รวมเซตที่ผู้ป่วยกดฝึกเอง) */}
-      {patient && <SkateArmProgress patientId={patient.patient_id} />}
-    </>
-  );
+  return <TrainingProgress patient={data.patient} sessions={data.sessions} />;
 }
 
 /* =========================== ประวัติการรักษา =========================== */
@@ -1007,6 +787,31 @@ function HistoryTab({ data }: { data: ReturnType<typeof useCase> }) {
       (a) => a.appointment_type === "ASSESSMENT" && a.status === "COMPLETED",
     )
     .sort((a, b) => b.appointment_date.localeCompare(a.appointment_date));
+  // โปรแกรมที่เลือกตอนประเมินแรกรับ = โปรแกรมที่มอบครั้งแรกของเคส
+  const firstProg = [...data.programs].sort((x, y) =>
+    x.assigned_date.localeCompare(y.assigned_date),
+  )[0];
+  const assessRows: [string, string][] = [
+    ["อาการที่มาพบ", patient.chief_complaint || "–"],
+    [
+      "ระดับความเจ็บปวด",
+      patient.pain_level != null ? `${patient.pain_level} (สเกล 0–10)` : "–",
+    ],
+    ["ตำแหน่งที่มีอาการ", patient.symptom_location || "–"],
+    ["เริ่มมีอาการ", patient.onset_duration || "–"],
+    [
+      "ระยะอาการ",
+      stageLabel(patient.start_stage ?? patient.current_stage),
+    ],
+    ["ข้างที่เป็นโรค", patient.affected_side || "–"],
+    ["บันทึกการประเมิน", patient.assessment_note || "–"],
+    [
+      "โปรแกรมฝึกที่เลือก",
+      firstProg
+        ? `${firstProg.program_name} · ${firstProg.session_per_day} เซต · ${Math.round(firstProg.duration_sec / 60)} นาที`
+        : "–",
+    ],
+  ];
 
   return (
     <>
@@ -1048,20 +853,14 @@ function HistoryTab({ data }: { data: ReturnType<typeof useCase> }) {
               />
             )}
           </div>
-          {patient.assessment_note && (
-            <div className="grid grid-cols-[24px_minmax(0,1fr)] gap-x-2 gap-y-1 text-[14px] leading-relaxed">
-              <span className="font-semibold text-rx-muted">A</span>
-              <span>{patient.assessment_note}</span>
-            </div>
-          )}
-          <div className="flex flex-wrap gap-1.5">
-            <span className="rounded-lg bg-rx-bg px-2.5 py-[3px] text-[12px]">
-              {stageLabel(patient.start_stage ?? patient.current_stage)}{" "}
-              (ประเมินแรกรับ)
-            </span>
-            <span className="rounded-lg bg-rx-bg px-2.5 py-[3px] text-[12px]">
-              เปิดเคส
-            </span>
+          {/* ผลการประเมินแรกรับทั้งหมด: ข้อมูลซักประวัติ + สิ่งที่นักกายภาพประเมินและเลือกให้ */}
+          <div className="grid grid-cols-[minmax(0,1fr)] gap-x-3 gap-y-1 text-[14px] leading-relaxed sm:grid-cols-[200px_minmax(0,1fr)]">
+            {assessRows.map(([k, v]) => (
+              <Fragment key={k}>
+                <span className="font-semibold text-rx-muted">{k}</span>
+                <span className="mb-1.5 whitespace-pre-wrap sm:mb-0">{v}</span>
+              </Fragment>
+            ))}
           </div>
         </div>
       ))}

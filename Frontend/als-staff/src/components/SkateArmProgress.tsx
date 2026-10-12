@@ -22,10 +22,9 @@ const SIDES: Side[] = ["RIGHT", "LEFT"];
 const SIDE_LABEL: Record<Side, string> = { RIGHT: "ข้างขวา", LEFT: "ข้างซ้าย" }; // คำเดียวกับหน้าเคสของเพื่อน
 const SIDE_COLOR: Record<Side, string> = { RIGHT: "#007AFF", LEFT: "#00A5FF" }; // สีเดียวกับกราฟในหน้าเคสของเพื่อน
 const DAYS_SHOWN = 8; // จำนวนวันที่มาฝึกล่าสุดที่แสดงในกราฟ
-const WINDOW_DAYS = 28; // ช่วงเทียบ: 4 สัปดาห์ล่าสุด vs 4 สัปดาห์ก่อนหน้า
 
-const avg = (xs: number[]) =>
-  xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null;
+const sum = (xs: number[]) =>
+  xs.length ? xs.reduce((a, b) => a + b, 0) : null;
 const dayKey = (iso: string) => new Date(iso).toDateString();
 const hm = (iso: string) =>
   new Date(iso).toLocaleTimeString("th-TH", {
@@ -67,11 +66,6 @@ export default function SkateArmProgress({ patientId }: { patientId: string }) {
     );
 
   const sidesUsed = SIDES.filter((sd) => sets.some((s) => s.side === sd));
-  const now = Date.now();
-  const inRange = (s: SkateSet, fromDays: number, toDays: number) => {
-    const age = (now - new Date(s.created_at).getTime()) / 86400000;
-    return age >= fromDays && age < toDays;
-  };
 
   // วันที่มาฝึก (ล่าสุด DAYS_SHOWN วัน) เรียงเก่า → ใหม่
   const dayList = [...new Set(sets.map((s) => dayKey(s.created_at)))]
@@ -83,7 +77,7 @@ export default function SkateArmProgress({ patientId }: { patientId: string }) {
     const bySide = Object.fromEntries(
       SIDES.map((sd) => [
         sd,
-        avg(ss.filter((s) => s.side === sd).map((s) => s.session_count)),
+        sum(ss.filter((s) => s.side === sd).map((s) => s.session_count)),
       ]),
     ) as Record<Side, number | null>;
     return { d, bySide };
@@ -116,22 +110,18 @@ export default function SkateArmProgress({ patientId }: { patientId: string }) {
         </div>
       ) : (
         <>
-          {/* สรุปแต่ละแขน: ครั้งเฉลี่ยต่อเซต 4 สัปดาห์ล่าสุด เทียบ 4 สัปดาห์ก่อนหน้า */}
+          {/* สรุปแต่ละแขน: จำนวนครั้งทั้งหมดที่ทำได้ในการมาฝึกครั้งล่าสุด */}
           <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-3">
             {sidesUsed.map((sd) => {
-              const cur = sets.filter(
-                (s) => s.side === sd && inRange(s, 0, WINDOW_DAYS),
+              const mine = sets.filter((s) => s.side === sd);
+              const lastDay = mine.reduce(
+                (m, s) => (s.created_at > m ? s.created_at : m),
+                "",
               );
-              const prev = sets.filter(
-                (s) =>
-                  s.side === sd && inRange(s, WINDOW_DAYS, WINDOW_DAYS * 2),
+              const cur = mine.filter(
+                (s) => dayKey(s.created_at) === dayKey(lastDay),
               );
-              const a = avg(cur.map((s) => s.session_count));
-              const b = avg(prev.map((s) => s.session_count));
-              const diff = a != null && b != null ? a - b : null;
-              const best = cur.length
-                ? Math.max(...cur.map((s) => s.session_count))
-                : null;
+              const total = sum(cur.map((s) => s.session_count));
               return (
                 <div
                   key={sd}
@@ -146,35 +136,22 @@ export default function SkateArmProgress({ patientId }: { patientId: string }) {
                   </span>
                   <div className="flex items-baseline gap-1.5">
                     <span className="text-[28px] font-semibold leading-none">
-                      {a != null ? a.toFixed(1) : "–"}
+                      {total ?? "–"}
                     </span>
                     <span className="text-[13px] text-rx-muted">
-                      ครั้งต่อเซต (4 สัปดาห์)
+                      ครั้งทั้งหมดในครั้งนี้
                     </span>
                   </div>
-                  <span className="text-[13px] text-rx-muted">
-                    {cur.length} เซต
-                    {best != null ? ` · สูงสุด ${best} ครั้ง` : ""}
-                  </span>
-                  {diff != null && (
-                    <span
-                      className={`text-[13px] font-semibold ${diff > 0 ? "text-[#145C38]" : diff < 0 ? "text-[#B42318]" : "text-rx-muted"}`}
-                    >
-                      {diff > 0 ? "▲" : diff < 0 ? "▼" : "•"}{" "}
-                      {diff === 0 ? "เท่าเดิม" : `${Math.abs(diff).toFixed(1)}`}{" "}
-                      เทียบ 4 สัปดาห์ก่อน ({b!.toFixed(1)})
-                    </span>
-                  )}
                 </div>
               );
             })}
           </div>
 
-          {/* กราฟแท่งคู่: ครั้งเฉลี่ยต่อเซตของแต่ละแขน ในแต่ละวันที่มาฝึก */}
+          {/* กราฟแท่งคู่: จำนวนครั้งทั้งหมดของแต่ละแขน ในแต่ละวันที่มาฝึก */}
           <div className={box}>
             <div className="flex flex-wrap items-center justify-between gap-2">
               <span className="text-[15px] font-semibold">
-                ครั้งเฉลี่ยต่อเซต · รายวัน
+                จำนวนครั้งทั้งหมดที่ทำได้ · รายวัน
               </span>
               <div className="flex gap-3">
                 {sidesUsed.map((sd) => (
@@ -210,7 +187,7 @@ export default function SkateArmProgress({ patientId }: { patientId: string }) {
                         className="flex flex-1 flex-col items-center justify-end gap-0.5"
                       >
                         <span className="text-[11px] text-rx-muted">
-                          {v != null ? Math.round(v * 10) / 10 : ""}
+                          {v ?? ""}
                         </span>
                         <div
                           className="w-full rounded-t-[4px]"

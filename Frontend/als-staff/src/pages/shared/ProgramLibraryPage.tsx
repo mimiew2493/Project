@@ -69,8 +69,6 @@ export default function ProgramLibraryPage({ user }: Props) {
   if (loading) return <Loading />
   const shown = programs.filter(p => p.status === 'ACTIVE')
   const isMine = (p: Program) => isPt && p.created_by === user.users_id
-  const standard = shown.filter(p => !isMine(p))
-  const mine = shown.filter(isMine)
   const setF = (k: keyof typeof EMPTY) => (e: { target: { value: string } }) => setForm(f => (f ? { ...f, [k]: e.target.value } : f))
 
   const grid = (items: Program[]) => (
@@ -111,7 +109,7 @@ export default function ProgramLibraryPage({ user }: Props) {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-col">
           <h1 className="m-0 text-[28px] font-bold leading-tight">{isPt ? 'คลังโปรแกรม' : 'คลังโปรแกรมฝึก'}</h1>
-          <span className="text-[13px] text-rx-muted">{isPt ? 'เลือกโปรแกรมแล้วมอบให้ผู้ป่วยในเคสของคุณ' : `โปรแกรมทั้งหมด ${shown.length} รายการ · เนื้อหาโปรแกรมกำหนดโดยนักกายภาพ`}</span>
+          <span className="text-[13px] text-rx-muted">{!isPt && `โปรแกรมทั้งหมด ${shown.length} รายการ · เนื้อหาโปรแกรมกำหนดโดยนักกายภาพ`}</span>
         </div>
         {isPt && <Btn onClick={openCreate}><Plus size={18} />สร้างโปรแกรม</Btn>}
       </div>
@@ -158,14 +156,7 @@ export default function ProgramLibraryPage({ user }: Props) {
         </div>
       )}
 
-      {isPt ? (
-        <>
-          <span className="pt-1 text-[16px] font-semibold">โปรแกรมมาตรฐาน <span className="text-[13px] font-normal text-rx-muted">· ใช้ได้ทุกคน แก้ไขไม่ได้</span></span>
-          {grid(standard)}
-          <span className="pt-2 text-[16px] font-semibold">โปรแกรมที่ฉันสร้าง <span className="text-[13px] font-normal text-rx-muted">· แก้ไขหรือลบได้</span></span>
-          {mine.length ? grid(mine) : <div className="rx-card px-5 py-5 text-[14px] text-rx-muted">ยังไม่ได้สร้างโปรแกรมเพิ่ม · กด "สร้างโปรแกรม" ด้านบน</div>}
-        </>
-      ) : grid(shown)}
+      {grid(shown)}
       {shown.length === 0 && <div className="rx-card px-5 py-6 text-[14px] text-rx-muted">ยังไม่มีโปรแกรมในคลัง</div>}
     </>
   )

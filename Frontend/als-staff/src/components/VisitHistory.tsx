@@ -1,6 +1,7 @@
-import type { Patient, PatientAppointment, PatientProgram, SoapAmendment, TherapySession } from '../types'
+import { Fragment } from 'react'
+import type { AppointmentRequest, Patient, PatientAppointment, PatientProgram, SoapAmendment, TherapySession } from '../types'
 import { activePrograms } from '../lib/useCase'
-import { setsOfVisit, avg, effectiveSoap, thaiDate, slotLabel, apptSlot, hhmm, sameDay, ptName, initials, stageLabel, fullName } from '../lib/clinic'
+import { setsOfVisit, avg, effectiveSoap, thaiDate, slotLabel, apptSlot, hhmm, sameDay, ptName, initials, stageLabel, fullName, SOAP_FIELDS, SOAP_LABEL, type SoapField } from '../lib/clinic'
 import { Avatar, Badge, Chip } from './ui'
 
 /** หัวข้อมูลผู้ป่วย (การ์ดบนสุดของหน้าเคส/ประวัติ) */
@@ -24,7 +25,7 @@ export function PatientHeader({ patient, programs, badge, extra, showPt }: { pat
 }
 
 /** การ์ดการมารักษาแต่ละครั้ง */
-export function VisitCard({ a, sessions, patient, variant, amendments = [] }: { a: PatientAppointment; sessions: TherapySession[]; patient: Patient; variant: 'staff' | 'therapist'; amendments?: SoapAmendment[] }) {
+export function VisitCard({ a, sessions, patient, variant, amendments = [], requests = [], appts = [] }: { a: PatientAppointment; sessions: TherapySession[]; patient: Patient; variant: 'staff' | 'therapist'; amendments?: SoapAmendment[]; /** คำขอนัดทั้งหมดของผู้ป่วย (หน้าเวชระเบียน) */ requests?: AppointmentRequest[]; /** นัดทั้งหมดของผู้ป่วย ไว้หาวันนัดที่ลงจากคำขอ */ appts?: PatientAppointment[] }) {
   // ผู้รักษาจริง = นักกายภาพที่เชื่อมต่อกระดาน · ข้อความ SOAP ใช้ฉบับปัจจุบัน (รวมบันทึกแก้ไข)
   const treater = a.treated_by_name ?? a.therapist_name
   const soap = effectiveSoap(a, amendments)
@@ -34,7 +35,6 @@ export function VisitCard({ a, sessions, patient, variant, amendments = [] }: { 
   const live = a.status === 'IN_PROGRESS' || a.status === 'CHECKED_IN'
   const treaterId = a.treated_by ?? a.ot_id
   const subst = !!treaterId && !!patient.primary_ot_id && treaterId !== patient.primary_ot_id
-  const total = sets.reduce((s, x) => s + x.total_reps, 0)
   const fatigue = avg(sets.map(s => s.fatigue_level).filter((f): f is number => f != null))
   const day = new Date(a.appointment_date)
   const isToday = sameDay(day, new Date())
@@ -60,10 +60,14 @@ export function VisitCard({ a, sessions, patient, variant, amendments = [] }: { 
             : <Badge label="ยังไม่บันทึกผล" />}
         </div>
         {live && <span className="text-[14px] text-rx-muted">กำลังฝึก · จะบันทึกผลเมื่อจบการฝึก</span>}
-        {came && (soap.A || soap.P) && (
-          <div className="grid grid-cols-[24px_minmax(0,1fr)] gap-x-2 gap-y-1 text-[14px] leading-relaxed">
-            {soap.A && <><span className="font-semibold text-rx-muted">A</span><span>{soap.A}</span></>}
-            {soap.P && <><span className="font-semibold text-rx-muted">P</span><span>{soap.P}</span></>}
+        {came && SOAP_FIELDS.some(k => soap[k]) && (
+          <div className="grid grid-cols-[minmax(0,1fr)] gap-x-3 gap-y-1 text-[14px] leading-relaxed sm:grid-cols-[200px_minmax(0,1fr)]">
+            {SOAP_FIELDS.map(k => (
+              <Fragment key={k}>
+                <span className="font-semibold text-rx-muted">{SOAP_LABEL[k]}</span>
+                <span className="mb-1.5 whitespace-pre-wrap sm:mb-0">{soap[k] || '–'}</span>
+              </Fragment>
+            ))}
           </div>
         )}
         {came && (
@@ -76,7 +80,7 @@ export function VisitCard({ a, sessions, patient, variant, amendments = [] }: { 
         )}
         {notes.map(m => (
           <div key={m.amendment_id} className="rounded-lg bg-rx-bg px-3.5 py-2 text-[12px] leading-relaxed text-rx-muted">
-            บันทึกแก้ไขเพิ่มเติม · {ptName(m.amended_by_name)} {thaiDate(new Date(m.amended_at))} {hhmm(new Date(m.amended_at))} — แก้ {m.field} จาก "{m.old_value || '–'}" เป็น "{m.new_value || '–'}" เหตุผล: {m.reason} ฉบับเดิมยังเก็บไว้
+            บันทึกแก้ไขเพิ่มเติม · {ptName(m.amended_by_name)} {thaiDate(new Date(m.amended_at))} {hhmm(new Date(m.amended_at))} — แก้ {SOAP_LABEL[m.field as SoapField] ?? m.field} จาก "{m.old_value || '–'}" เป็น "{m.new_value || '–'}" เหตุผล: {m.reason} ฉบับเดิมยังเก็บไว้
           </div>
         ))}
       </div>
@@ -100,23 +104,33 @@ export function VisitCard({ a, sessions, patient, variant, amendments = [] }: { 
         </div>
         {subst && <Badge label="รักษาแทนนักกายภาพประจำเคส" bg="#FFF0D9" fg="#8C420A" />}
       </div>
-      {came && (
-        <div className="flex flex-col gap-2.5">
-          <div className="flex flex-wrap gap-1.5">
-            <span className="rounded-lg bg-rx-bg px-2.5 py-[3px] text-[12px] font-semibold">รวม {total} ครั้ง</span>
-            {planChip}{setChips}
-            {fatigue != null && <Chip>ความเหนื่อยระดับ {fatigue.toFixed(fatigue % 1 ? 1 : 0)}</Chip>}
-            {a.weight_kg != null && <Chip>น้ำหนัก {a.weight_kg} กก.</Chip>}
+      {/* เวชระเบียนเห็นเฉพาะ: ข้อมูลการสอบถามเพิ่มจากผู้ป่วย · นัดที่นักกายภาพขอและหมายเหตุ · วันนัดที่เวชระเบียนลงให้ */}
+      {came && (() => {
+        const asked = soap.S || a.symptoms_today
+        // คำขอนัดที่นักกายภาพส่งในการมาครั้งนี้ (ส่งวันเดียวกับนัด)
+        const reqs = requests.filter(r => sameDay(new Date(r.created_at), day))
+        const rows: [string, string][] = []
+        if (asked) rows.push([SOAP_LABEL.S, asked])
+        for (const r of reqs) {
+          if (r.note) rows.push(['หมายเหตุจากนักกายภาพ', r.note])
+          const booked = r.appointment_id ? appts.find(x => x.appointment_id === r.appointment_id) : undefined
+          rows.push(['วันนัดที่เวชระเบียนลง',
+            booked ? `${thaiDate(new Date(booked.appointment_date))} · ${slotLabel(apptSlot(booked))} น.${r.booked_at ? ` (ลงนัดเมื่อ ${thaiDate(new Date(r.booked_at))} ${hhmm(new Date(r.booked_at))} น.)` : ''}`
+              : r.status === 'CANCELLED' ? 'ยกเลิกคำขอนัดแล้ว'
+              : r.status === 'BOOKED' ? 'ลงนัดแล้ว'
+              : 'รอเวชระเบียนลงนัด'])
+        }
+        return rows.length ? (
+          <div className="grid grid-cols-[minmax(0,1fr)] gap-x-3 gap-y-1.5 text-[14px] leading-relaxed sm:grid-cols-[220px_minmax(0,1fr)]">
+            {rows.map(([k, v], i) => (
+              <Fragment key={i}>
+                <span className="text-rx-muted">{k}</span>
+                <span className="mb-1.5 whitespace-pre-wrap sm:mb-0">{v}</span>
+              </Fragment>
+            ))}
           </div>
-          {(a.symptoms_today || soap.A || soap.P) && (
-            <div className="grid grid-cols-[96px_minmax(0,1fr)] gap-x-2.5 gap-y-1.5 text-[14px] leading-relaxed">
-              {a.symptoms_today && <><span className="text-rx-muted">ฟีดแบ็ก</span><span>"{a.symptoms_today}"</span></>}
-              {soap.A && <><span className="text-rx-muted">ผลการรักษา</span><span>{soap.A}</span></>}
-              {soap.P && <><span className="text-rx-muted">คำแนะนำ</span><span>{soap.P}</span></>}
-            </div>
-          )}
-        </div>
-      )}
+        ) : null
+      })()}
     </div>
   )
 }

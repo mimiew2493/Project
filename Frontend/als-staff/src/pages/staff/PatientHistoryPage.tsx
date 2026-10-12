@@ -1,12 +1,11 @@
 import { useEffect, useState } from "react";
 import { CalendarClock } from "lucide-react";
 import type { AppointmentRequest } from "../../types";
-import { requestRange } from "../../components/AppointmentRequests";
 import { PatientHeader, VisitCard } from "../../components/VisitHistory";
-import SkateArmProgress from "../../components/SkateArmProgress";
+import TrainingProgress from "../../components/TrainingProgress";
 import { useCase, pastVisits } from "../../lib/useCase";
 import { BackLink, Loading, Stat } from "../../components/ui";
-import { avg, list, ptName } from "../../lib/clinic";
+import { list, ptName } from "../../lib/clinic";
 
 interface Props {
   patientId: string;
@@ -24,11 +23,11 @@ export default function PatientHistoryPage({
   const { patient, appts, sessions, programs, amendments, loading } =
     useCase(patientId);
   const [show, setShow] = useState(PAGE);
-  // ข้อความขอนัดที่นักกายภาพส่งมา (รอเวชระเบียนลงนัด)
+  // คำขอนัดที่นักกายภาพส่งมาทั้งหมด (ที่รอลงนัดแสดงเป็นแถบด้านบน · ทุกรายการแสดงในประวัติแต่ละครั้ง)
   const [requests, setRequests] = useState<AppointmentRequest[]>([]);
   useEffect(() => {
     list<AppointmentRequest>(
-      `/api/appointment-requests?patient_id=${patientId}`,
+      `/api/appointment-requests?status=ALL&patient_id=${patientId}`,
     ).then(setRequests);
   }, [patientId]);
 
@@ -43,7 +42,6 @@ export default function PatientHistoryPage({
 
   const visits = pastVisits(appts);
   const came = visits.filter((v) => v.status === "COMPLETED");
-  const avgReps = avg(sessions.map((s) => s.total_reps));
   const shown = visits.slice(0, show);
   const caretaker = patient.caretaker_name
     ? `ผู้ดูแล ${patient.caretaker_name}${patient.caretaker_phone ? ` ${patient.caretaker_phone}` : ""}`
@@ -58,7 +56,7 @@ export default function PatientHistoryPage({
         extra={[caretaker]}
         showPt
       />
-      {requests.map((r) => (
+      {requests.filter((r) => r.status === "PENDING").map((r) => (
         <div
           key={r.request_id}
           className="flex flex-wrap items-center gap-3.5 rounded-lg border border-[#F2D7AE] bg-[#FFF8EC] px-5 py-4"
@@ -68,11 +66,10 @@ export default function PatientHistoryPage({
           </div>
           <div className="flex flex-[1_1_300px] flex-col gap-0.5">
             <span className="text-[13px] text-[#8C420A]">
-              {ptName(r.therapist_name)} ขอให้นัดครั้งถัดไป · ช่วง{" "}
-              {requestRange(r)}
+              {ptName(r.therapist_name)} ขอให้นัดครั้งถัดไป
             </span>
             <span className="text-[16px] font-semibold text-[#5C2E07]">
-              “{r.note || r.window_label}”
+              {r.note ? `หมายเหตุ: ${r.note}` : "ไม่มีหมายเหตุ"}
             </span>
           </div>
           <span className="text-[12px] text-[#8C420A]">
@@ -80,16 +77,12 @@ export default function PatientHistoryPage({
           </span>
         </div>
       ))}
-      <div className="grid grid-cols-[repeat(auto-fit,minmax(150px,1fr))] gap-3">
-        <Stat label="มารักษาทั้งหมด" value={`${came.length} ครั้ง`} />
-        <Stat
-          label="ครั้งเฉลี่ยต่อเซต"
-          value={avgReps != null ? avgReps.toFixed(1) : "–"}
-          color="#0066D6"
-        />
-      </div>
-      {/* ผลจากเครื่องฝึก แยกแขนซ้าย/ขวา */}
-      <SkateArmProgress patientId={patient.patient_id} />
+      {/* พัฒนาการการฝึก — แบบเดียวกับแท็บพัฒนาการของนักกายภาพ · การ์ดมารักษาทั้งหมดอยู่แถวเดียวกับเวลาเฉลี่ยต่อครั้ง */}
+      <TrainingProgress
+        patient={patient}
+        sessions={sessions}
+        stats={<Stat label="มารักษาทั้งหมด" value={`${came.length} ครั้ง`} />}
+      />
       <span className="text-[16px] font-semibold">ประวัติการรักษา</span>
       {shown.length === 0 && (
         <div className="rx-card px-5 py-6 text-[14px] text-rx-muted">
@@ -104,6 +97,8 @@ export default function PatientHistoryPage({
           patient={patient}
           variant="staff"
           amendments={amendments}
+          requests={requests}
+          appts={appts}
         />
       ))}
       <div className="flex flex-col items-center gap-2.5 py-1">
@@ -121,8 +116,8 @@ export default function PatientHistoryPage({
         )}
       </div>
       <span className="text-[12px] text-rx-muted">
-        เวชระเบียนเห็นผลการรักษา (A) และคำแนะนำ (P) ของนักกายภาพ ·
-        อาการที่ผู้ป่วยเล่าและผลตรวจวัด (S, O) เปิดดูได้เฉพาะนักกายภาพ
+        เวชระเบียนเห็นข้อมูลการสอบถามเพิ่มจากผู้ป่วย นัดที่นักกายภาพขอพร้อมหมายเหตุ
+        และวันนัดที่ลงให้ · ผลการกายภาพ ผลการประเมินอาการ และแผนการรักษา เปิดดูได้เฉพาะนักกายภาพ
       </span>
     </>
   );
