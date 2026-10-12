@@ -10,18 +10,12 @@ import {
 import { sql } from "drizzle-orm";
 
 export const devices = pgTable("devices", {
-  device_id: varchar("device_id", { length: 10 })
-  .primaryKey()
-  .notNull(),
+  device_id: varchar("device_id", { length: 10 }).primaryKey().notNull(),
   device_name: varchar("device_name", { length: 100 }).notNull(),
 
-  serial_number: varchar("serial_number", { length: 100 })
-    .notNull()
-    .unique(),
+  serial_number: varchar("serial_number", { length: 100 }).notNull().unique(),
 
-  status: varchar("status", { length: 20 })
-    .notNull()
-    .default("ACTIVE"),
+  status: varchar("status", { length: 20 }).notNull().default("ACTIVE"),
 
   // เทเลเมทรีของอุปกรณ์ skateboard rehab — รายงานจากตัวอุปกรณ์ผ่านไฟร์มแวร์ (อุปกรณ์ส่งเข้ามาผ่าน POST /api/devices/telemetry)
   connection_status: varchar("connection_status", { length: 20 })
@@ -41,9 +35,7 @@ export const devices = pgTable("devices", {
   last_seen_at: timestamp("last_seen_at"),
 
   // ค่าสดระหว่างฝึก รายงานผ่าน POST /api/devices/telemetry
-  live_status: varchar("live_status", { length: 20 })
-    .notNull()
-    .default("IDLE"), // IDLE | RUNNING
+  live_status: varchar("live_status", { length: 20 }).notNull().default("IDLE"), // IDLE | RUNNING
 
   live_reps: integer("live_reps"), // null = ไม่ได้อยู่ระหว่างเซต
 
@@ -61,10 +53,10 @@ export const devices = pgTable("devices", {
 
   live_angle: real("live_angle"),
   live_phase: varchar("live_phase", { length: 10 }),
+  current_side: varchar("current_side", { length: 10 }), // RIGHT | LEFT | null — ข้างของเซตที่กำลังฝึก
+  set_started_at: timestamp("set_started_at", { withTimezone: true }), // เวลาเริ่มเซต (ฐานข้อมูลจดเองตอนบอร์ดเป็น RUNNING)
 
   api_key: text("api_key").unique(),
 
-  created_at: timestamp("created_at")
-    .defaultNow()
-    .notNull(),
+  created_at: timestamp("created_at").defaultNow().notNull(),
 });

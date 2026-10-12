@@ -58,6 +58,12 @@ export async function GET(req: Request) {
         last_seen_at: d.last_seen_at,
         live_status: online ? d.live_status : 'IDLE',
         live_reps: online ? d.live_reps : null,
+        live_angle: online ? d.live_angle : null,
+        live_phase: online ? d.live_phase : null,
+        // เวลาเริ่มเซต (จากฐานข้อมูล) ใช้นับถอยหลัง ไม่เพี้ยนแม้รีเฟรชหน้าหรือเน็ตหลุด
+        set_started_at: online && d.live_status === 'RUNNING' ? d.set_started_at : null,
+        // ผู้ป่วยที่ใช้เครื่องอยู่ตอนนี้ = ผู้ป่วยในนัดที่เวชเรียกคิวแล้ว (กระดานผูกกับนัด)
+        using_patient_id: online ? (holder?.patient_id ?? null) : null,
         voltage: d.voltage != null ? Number(d.voltage) : null,
         current_a: d.current_a != null ? Number(d.current_a) : null,
         holder_patient_id: holder?.patient_id ?? null,
