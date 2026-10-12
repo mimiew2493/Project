@@ -14,8 +14,8 @@ interface Props {
 const POLL_MS = 1500
 const STOP_WAIT_MS = 15000
 
-// ผู้ป่วยหยุดเซตได้ทุกเมื่อถ้าเหนื่อย (STOP) — เริ่มเซตเป็นหน้าที่ของนักกายภาพ
-const sendCommand = (deviceId: string, command: 'STOP') =>
+// ผู้ป่วยเริ่มเซต (START) และจบเซตเอง (STOP) — นักกายภาพอ่านผลแต่ละเซตแล้วบันทึกผลการรักษา
+const sendCommand = (deviceId: string, command: 'START' | 'STOP') =>
   api('/api/devices/command', { method: 'POST', body: { deviceId, command } }).catch(() => {})
 
 const fetchSessions = (patientId: string) => list<TherapySession>(`/api/sessions?patient_id=${patientId}`)
@@ -28,6 +28,7 @@ export default function PatientTrainPage({ patientId, onBack, onFinish }: Props)
   const [loading, setLoading] = useState(true)
   const [elapsed, setElapsed] = useState(0)
   const [stopping, setStopping] = useState(false)
+  const [starting, setStarting] = useState(false)
   const baseline = useRef<Set<string> | null>(null)
   const startedAt = useRef(Date.now())
   const finished = useRef(false)
@@ -56,7 +57,7 @@ export default function PatientTrainPage({ patientId, onBack, onFinish }: Props)
         setDevice(mine)
         baseline.current = new Set(s.map(x => x.session_id))
         setSetNo(sessionsOnDay(s, new Date()).length + 1)
-        // ผู้ป่วยไม่ต้องกดเริ่มฝึกเอง: กระดานเริ่มนับเมื่อนักกายภาพเชื่อมต่อ / เริ่มเซตถัดไป
+        // เซตแรกกระดานเริ่มนับเองเมื่อเชื่อมต่อ · เซตถัดไปผู้ป่วยกดเริ่มเอง
       })
       .finally(() => setLoading(false))
   }, [patientId])
@@ -81,13 +82,20 @@ export default function PatientTrainPage({ patientId, onBack, onFinish }: Props)
   }
 
 
+  const startSet = () => {
+    if (!device || starting) return
+    setStarting(true)
+    sendCommand(device.device_id, 'START')
+    setTimeout(() => setStarting(false), 4000)
+  }
+
   const totalSets = program?.session_per_day ?? 0
   const connected = device?.connection_status === 'CONNECTED'
   const liveReps = connected && device?.live_status === 'RUNNING' && typeof device.live_reps === 'number' ? device.live_reps : null
   const hint = !device ? 'ยังไม่ได้ผูกกระดาน กรุณาแจ้งนักกายภาพ'
     : !connected ? 'เปิดเครื่องกระดานและรอให้เชื่อมต่อ WiFi'
     : stopping ? 'กำลังรอผลจากกระดาน...'
-    : liveReps == null ? 'รอนักกายภาพเริ่มเซต'
+    : liveReps == null ? (starting ? 'กำลังเริ่มเซต...' : 'พร้อมแล้วกด "เริ่มเซต"')
     : 'ครั้งที่ทำได้ในเซตนี้ · ทำเท่าที่ไหว ไม่มีจำนวนขั้นต่ำ'
 
   return (
@@ -125,7 +133,12 @@ export default function PatientTrainPage({ patientId, onBack, onFinish }: Props)
 
       <div className="flex-1" />
 
-      <button type="button" onClick={endSet} disabled={stopping} className="h-[52px] rounded-[14px] border-[1.5px] border-pt-accent bg-white text-[16px] font-semibold text-pt-accent-ink disabled:opacity-60">
+      {connected && liveReps == null && !stopping && (
+        <button type="button" onClick={startSet} disabled={starting} className="h-[52px] rounded-[14px] bg-pt-accent text-[16px] font-semibold text-white disabled:opacity-60">
+          {starting ? 'กำลังเริ่มเซต...' : 'เริ่มเซต'}
+        </button>
+      )}
+      <button type="button" onClick={endSet} disabled={stopping || liveReps == null} className="h-[52px] rounded-[14px] border-[1.5px] border-pt-accent bg-white text-[16px] font-semibold text-pt-accent-ink disabled:opacity-60">
         {stopping ? 'กำลังบันทึกผล...' : 'จบเซตนี้'}
       </button>
       <span className="text-center text-[13px] text-pt-muted">หยุดได้ทุกเมื่อถ้ารู้สึกเหนื่อย ระบบจะบันทึกจำนวนที่ทำได้ไว้</span>

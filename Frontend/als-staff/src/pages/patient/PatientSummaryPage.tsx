@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import type { TherapySession, PatientProgram } from '../../types'
+import type { Device, TherapySession, PatientProgram } from '../../types'
 import { Check } from 'lucide-react'
 import { api, list } from '../../lib/clinic'
 import { SetSegments } from './patientUi'
@@ -12,17 +12,23 @@ interface Props {
   session: TherapySession | null
   onHome: () => void
   onHistory: () => void
+  /** ผู้ป่วยกดเริ่มเซตถัดไปเอง → กลับไปหน้าระหว่างฝึก */
+  onNextSet: () => void
 }
 
-export default function PatientSummaryPage({ patientId, firstName, session, onHome, onHistory }: Props) {
+export default function PatientSummaryPage({ patientId, firstName, session, onHome, onHistory, onNextSet }: Props) {
   const [program, setProgram] = useState<PatientProgram | null>(null)
   const [sessions, setSessions] = useState<TherapySession[]>([])
   const [fatigue, setFatigue] = useState<number | null>(session?.fatigue_level ?? null)
   const [saveError, setSaveError] = useState('')
+  // กระดานยังผูกกับนัดของผู้ป่วย (นักกายภาพยังไม่บันทึกผลจบการฝึก) → เริ่มเซตถัดไปได้
+  const [device, setDevice] = useState<Device | null>(null)
+  const [starting, setStarting] = useState(false)
 
   useEffect(() => {
     list<PatientProgram>(`/api/patient-programs?patient_id=${patientId}`).then(pp => setProgram(pp.find(x => x.status === 'ACTIVE') ?? null))
     list<TherapySession>(`/api/sessions?patient_id=${patientId}`).then(setSessions)
+    list<Device>('/api/devices').then(ds => setDevice(ds.find(d => d.holder_patient_id === patientId) ?? null))
   }, [patientId])
 
   const rate = (level: number) => {
@@ -31,6 +37,14 @@ export default function PatientSummaryPage({ patientId, firstName, session, onHo
     setFatigue(level); setSaveError('')
     api('/api/sessions', { method: 'PATCH', body: { sessionId: session.session_id, fatigueLevel: level } })
       .catch(() => { setFatigue(prev); setSaveError('บันทึกความเหนื่อยไม่สำเร็จ ลองอีกครั้ง') })
+  }
+
+  const startNext = () => {
+    if (!device || starting) return
+    setStarting(true)
+    api('/api/devices/command', { method: 'POST', body: { deviceId: device.device_id, command: 'START' } })
+      .then(() => onNextSet())
+      .catch(() => { setStarting(false); setSaveError('เริ่มเซตไม่สำเร็จ ลองอีกครั้ง') })
   }
 
   const totalSets = program?.session_per_day ?? 0
@@ -96,7 +110,12 @@ export default function PatientSummaryPage({ patientId, firstName, session, onHo
       )}
 
       <div className="flex-1" />
-      <button type="button" onClick={onHome} className="h-[52px] rounded-[14px] bg-pt-accent text-[16px] font-semibold text-white">กลับหน้าหลัก</button>
+      {device && (totalSets === 0 || today.length < totalSets) && (
+        <button type="button" onClick={startNext} disabled={starting} className="h-[52px] rounded-[14px] bg-pt-accent text-[16px] font-semibold text-white disabled:opacity-60">
+          {starting ? 'กำลังเริ่มเซต...' : `เริ่มเซตถัดไป${totalSets ? ` (เซต ${today.length + 1}/${totalSets})` : ''}`}
+        </button>
+      )}
+      <button type="button" onClick={onHome} className={`h-[52px] rounded-[14px] text-[16px] font-semibold ${device && (totalSets === 0 || today.length < totalSets) ? 'border-[1.5px] border-pt-accent bg-white text-pt-accent-ink' : 'bg-pt-accent text-white'}`}>กลับหน้าหลัก</button>
       <button type="button" onClick={onHistory} className="h-11 text-[15px] font-medium text-pt-accent-ink">ดูผลการฝึกทั้งหมด</button>
     </div>
   )

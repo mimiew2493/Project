@@ -51,14 +51,19 @@ export async function POST(req: Request) {
 
       // นัดที่ผูกอยู่ต้องกำลังฝึก และใช้โปรแกรมของเคสในนัดนั้น
       const [appt] = device.current_appointment_id ? await tx
-        .select({ appointment_id: appointments.appointment_id, case_id: appointments.case_id, status: appointments.status })
+        .select({ appointment_id: appointments.appointment_id, case_id: appointments.case_id, status: appointments.status, patient_program_id: appointments.patient_program_id, current_side: appointments.current_side, treated_side: appointments.treated_side })
         .from(appointments).where(eq(appointments.appointment_id, device.current_appointment_id)) : []
       const bound = appt?.status === 'IN_PROGRESS'
       const [program] = bound && appt.case_id ? await tx
         .select({ patient_program_id: patientPrograms.patient_program_id, duration_sec: programs.duration_sec, session_per_day: programs.session_per_day })
         .from(patientPrograms).innerJoin(programs, eq(patientPrograms.program_id, programs.program_id))
-        .where(and(eq(patientPrograms.case_id, appt.case_id), eq(patientPrograms.status, 'ACTIVE')))
+        // โปรแกรมที่นักกายภาพเลือกให้ครั้งนี้ ถ้าไม่ได้เลือกใช้โปรแกรมที่มอบล่าสุดของเคส
+        .where(appt.patient_program_id
+          ? eq(patientPrograms.patient_program_id, appt.patient_program_id)
+          : and(eq(patientPrograms.case_id, appt.case_id), eq(patientPrograms.status, 'ACTIVE')))
         .orderBy(desc(patientPrograms.assigned_date)).limit(1) : []
+      // ข้างของเซต: ตามที่นักกายภาพเลือก หรือข้างเดียวที่รักษาครั้งนี้
+      const side = appt?.current_side ?? (appt?.treated_side === 'ข้างซ้าย' ? 'LEFT' : appt?.treated_side === 'ข้างขวา' ? 'RIGHT' : null)
 
       const patch: Record<string, unknown> = {
         connection_status: 'CONNECTED',
@@ -92,6 +97,7 @@ export async function POST(req: Request) {
             duration_sec: Math.max(0, Math.round(num(body.durationSec) ?? 0)),
             total_reps: totalReps,
             status: 'COMPLETED',
+            side,
           })
           await tx.insert(movementData).values({
             movement_id: shortId('MV'),

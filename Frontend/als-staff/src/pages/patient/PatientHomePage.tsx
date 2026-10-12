@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { Patient, PatientAppointment, Device, TherapySession, PatientProgram, PageKey } from '../../types'
-import { PlayCircle, Wifi, WifiOff, CalendarDays, Flame, Check } from 'lucide-react'
+import { PlayCircle, Wifi, WifiOff, CalendarDays, Check } from 'lucide-react'
 import { api, list, isTraining, boardLink, BOARD_LINK_LABEL, sameDay, startOfDay, thaiDate, hhmm, ptName } from '../../lib/clinic'
 import { ProgressRing, SetSegments } from './patientUi'
 import { fmtClock, sessionsOnDay } from './patientUtils'
@@ -67,11 +67,7 @@ export default function PatientHomePage({ patientId, onNavigate, onLogout }: Pro
           <span className="text-[21px] font-bold">สวัสดี, {firstName}</span>
           <span className="text-[12px] text-pt-muted">รหัสผู้ป่วย: {patient.patient_id}</span>
         </div>
-        {due.length > 0 && (
-          <div className="flex items-center gap-1 rounded-full bg-[#FFF0D9] px-3 py-1.5 text-[13px] font-semibold text-[#8C420A]">
-            <Flame size={14} /> {came === due.length ? 'มาตามนัดครบ' : `มาตามนัด ${came}/${due.length}`}
-          </div>
-        )}
+        
       </div>
 
       <div className="flex flex-col items-center gap-2">

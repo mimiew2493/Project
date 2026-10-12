@@ -16,7 +16,7 @@ export async function OPTIONS() {
   return new NextResponse(null, { status: 200, headers: cors })
 }
 
-// POST /api/devices/command — ฝากคำสั่งไว้ให้กระดาน (ผู้ป่วยกดจบเซต = STOP) { deviceId, command: 'START' | 'STOP' }
+// POST /api/devices/command — ฝากคำสั่งไว้ให้กระดาน (ผู้ป่วยกดเริ่มเซต = START · จบเซต = STOP) { deviceId, command: 'START' | 'STOP' }
 // อุปกรณ์จะได้รับคำสั่งในคำตอบของ POST /api/devices/telemetry ครั้งถัดไป (ภายในไม่กี่วินาที)
 export async function POST(req: Request) {
   try {
@@ -26,9 +26,8 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'ต้องระบุ deviceId และ command (START | STOP)' }, { status: 400, headers: cors })
     }
 
-    // ผู้ป่วยหยุดเซตได้ (เหนื่อย) เฉพาะกระดานที่ผูกกับนัดของตัวเอง · เริ่มเซตเป็นหน้าที่นักกายภาพ
+    // ผู้ป่วยเริ่มและจบเซตเองจากแอป — เฉพาะกระดานที่ผูกกับนัดของตัวเอง
     if (viewer.role_id === ROLE.PATIENT) {
-      if (body.command !== 'STOP') return NextResponse.json({ error: 'ผู้ป่วยไม่ต้องกดเริ่มฝึกเอง นักกายภาพจะเริ่มเซตให้' }, { status: 403, headers: cors })
       const [d] = await db.select({ holder: devices.holder_patient_id }).from(devices).where(eq(devices.device_id, body.deviceId))
       assertOwnPatient(viewer, d?.holder)
     }
