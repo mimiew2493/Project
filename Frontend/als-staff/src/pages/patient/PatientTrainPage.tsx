@@ -1,5 +1,10 @@
 import { useEffect, useRef, useState } from "react";
-import type { Device, TherapySession, PatientProgram } from "../../types";
+import type {
+  Device,
+  TherapySession,
+  PatientProgram,
+  PatientAppointment,
+} from "../../types";
 import { ChevronLeft, Check, AlertTriangle } from "lucide-react";
 import { api, list } from "../../lib/clinic";
 import { fmtDuration } from "./patientUtils";
@@ -11,6 +16,7 @@ import {
   countBySide,
   type Side,
 } from "./Patientside";
+import { trainingEndsAt, todayTrainingAppt } from "./patientSkate";
 
 interface Props {
   patientId: string;
@@ -293,6 +299,11 @@ export default function PatientTrainPage({ patientId, onBack }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [lastSet, setLastSet] = useState<SkateSession | null>(null); // เซตที่เพิ่งจบ → แสดงหน้าผล
   const [confirmEnd, setConfirmEnd] = useState(false); // ถามยืนยันเมื่อจบก่อนครบเวลา
+  // นัดฝึกวันนี้ (undefined = ยังโหลดไม่เสร็จ/โหลดไม่ได้ → ไม่ล็อก)
+  const [appt, setAppt] = useState<PatientAppointment | null | undefined>(
+    undefined,
+  );
+  const [, setClock] = useState(0); // ให้หน้าคำนวณ "หมดเวลาฝึก" ใหม่ทุกนาที
 
   const baseline = useRef<Set<number> | null>(null);
   const runStartedAt = useRef<number | null>(null);
@@ -397,6 +408,20 @@ export default function PatientTrainPage({ patientId, onBack }: Props) {
       })
       .catch(() => setError("โหลดข้อมูลไม่สำเร็จ ลองกลับแล้วเข้าใหม่"))
       .finally(() => setLoading(false));
+  }, [patientId]);
+
+  // ---------- นัดวันนี้: ใช้ตัดสินว่ายังอยู่ในเวลาฝึกไหม ----------
+  useEffect(() => {
+    const load = () =>
+      list<PatientAppointment>(`/api/appointments?patient_id=${patientId}`)
+        .then((xs) => setAppt(todayTrainingAppt(xs)))
+        .catch(() => {});
+    load();
+    const t = setInterval(() => {
+      load();
+      setClock((c) => c + 1);
+    }, 15000);
+    return () => clearInterval(t);
   }, [patientId]);
 
   // ---------- ตัวจับเวลา + ถามสถานะ ----------
@@ -604,6 +629,16 @@ export default function PatientTrainPage({ patientId, onBack }: Props) {
   // ครบเซตตามโปรแกรมแล้ว: เริ่มเซตใหม่ไม่ได้ (กันฝึกเกินขนาดที่นักกายภาพสั่ง)
   const lockedDone = allDone && (phase === "available" || phase === "ready");
 
+  // นอกเวลาฝึก: ไม่มีนัดวันนี้ / นัดจบแล้ว / เลยเวลาฝึก → เริ่มเซตใหม่ไม่ได้
+  // (เซตที่กำลังฝึกอยู่ ปล่อยให้จบตามปกติ)
+  const noAppt = appt === null;
+  const timeOver =
+    !!appt &&
+    (appt.status === "COMPLETED" ||
+      Date.now() > trainingEndsAt(appt).getTime());
+  const lockedTime = !lockedDone && phase !== "running" && (noAppt || timeOver);
+  const timeMsg = noAppt ? "วันนี้ไม่มีนัดฝึก" : "หมดเวลาฝึกแล้ว";
+
   const status = {
     none: { text: "ไม่พบเครื่องฝึก", tone: "muted" },
     offline: { text: "เครื่องปิดอยู่", tone: "muted" },
@@ -612,53 +647,63 @@ export default function PatientTrainPage({ patientId, onBack }: Props) {
     ready: { text: "เชื่อมต่อแล้ว", tone: "ok" },
     running: { text: "เชื่อมต่อแล้ว", tone: "ok" },
   }[phase];
+  if (lockedTime) {
+    status.text = noAppt ? "ไม่มีนัดวันนี้" : "หมดเวลาฝึก";
+    status.tone = "muted";
+  }
 
   const hint = loading
     ? "กำลังโหลด..."
     : lockedDone
       ? "ทำครบตามโปรแกรมแล้ว พักได้เลย"
-      : phase === "none"
-        ? "แจ้งนักกายภาพ"
-        : phase === "offline"
-          ? "เปิดเครื่องแล้วรอสักครู่"
-          : phase === "busy"
-            ? "รอผู้ป่วยท่านก่อนหน้าฝึกเสร็จ"
-            : phase === "available"
-              ? "รอเจ้าหน้าที่เรียกคิว แล้วกดเริ่มเซตได้เลย"
-              : phase === "ready"
-                ? imuError
-                  ? "รอเซ็นเซอร์กลับมาปกติ"
-                  : "พร้อมแล้ว กดเริ่มเซต"
-                : busyAction === "stop"
-                  ? "กำลังบันทึกผล..."
-                  : imuError
-                    ? "เซ็นเซอร์มีปัญหา แจ้งนักกายภาพ"
-                    : "ทำเท่าที่ไหว";
+      : lockedTime
+        ? noAppt
+          ? "วันนี้ไม่มีนัดฝึก ดูวันนัดได้ที่หน้านัดหมาย"
+          : "หมดเวลาฝึกวันนี้แล้ว ดูนัดครั้งถัดไปที่หน้านัดหมาย"
+        : phase === "none"
+          ? "แจ้งนักกายภาพ"
+          : phase === "offline"
+            ? "เปิดเครื่องแล้วรอสักครู่"
+            : phase === "busy"
+              ? "รอผู้ป่วยท่านก่อนหน้าฝึกเสร็จ"
+              : phase === "available"
+                ? "รอเจ้าหน้าที่เรียกคิว แล้วกดเริ่มเซตได้เลย"
+                : phase === "ready"
+                  ? imuError
+                    ? "รอเซ็นเซอร์กลับมาปกติ"
+                    : "พร้อมแล้ว กดเริ่มเซต"
+                  : busyAction === "stop"
+                    ? "กำลังบันทึกผล..."
+                    : imuError
+                      ? "เซ็นเซอร์มีปัญหา แจ้งนักกายภาพ"
+                      : "ทำเท่าที่ไหว";
 
   const primary = lockedDone
     ? { label: "ฝึกครบแล้ววันนี้", onClick: () => {}, filled: false }
-    : phase === "ready"
-      ? {
-          label: busyAction === "start" ? "กำลังเริ่ม..." : "เริ่มเซต",
-          onClick: startSet,
-          filled: true,
-        }
-      : phase === "running"
+    : lockedTime
+      ? { label: timeMsg, onClick: () => {}, filled: false }
+      : phase === "ready"
         ? {
-            label: busyAction === "stop" ? "กำลังบันทึก..." : "จบเซต",
-            onClick: endSet,
-            filled: false,
+            label: busyAction === "start" ? "กำลังเริ่ม..." : "เริ่มเซต",
+            onClick: startSet,
+            filled: true,
           }
-        : {
-            label:
-              phase === "busy"
-                ? "รอคิว"
-                : phase === "available"
-                  ? "รอเรียกคิว"
-                  : "รอเครื่อง",
-            onClick: () => {},
-            filled: false,
-          };
+        : phase === "running"
+          ? {
+              label: busyAction === "stop" ? "กำลังบันทึก..." : "จบเซต",
+              onClick: endSet,
+              filled: false,
+            }
+          : {
+              label:
+                phase === "busy"
+                  ? "รอคิว"
+                  : phase === "available"
+                    ? "รอเรียกคิว"
+                    : "รอเครื่อง",
+              onClick: () => {},
+              filled: false,
+            };
   const primaryDisabled =
     !!busyAction ||
     phase === "none" ||
@@ -666,6 +711,7 @@ export default function PatientTrainPage({ patientId, onBack }: Props) {
     phase === "busy" ||
     phase === "available" ||
     lockedDone ||
+    lockedTime ||
     (imuError && phase === "ready"); // เซ็นเซอร์เสีย ห้ามเริ่มเซต (นับไม่ได้) แต่ยังกดจบเซตได้เสมอ
 
   // ---------- หน้าผลหลังจบเซต ----------

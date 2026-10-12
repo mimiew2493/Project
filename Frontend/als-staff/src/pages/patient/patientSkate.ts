@@ -1,7 +1,8 @@
 // ผลการฝึกจากสเก็ตบอร์ด (ตาราง skateboard_sessions)
 // ใช้ร่วมกันทุกหน้าของผู้ป่วย ตัวเลขจะได้ตรงกันทุกหน้า
 
-import { list } from "../../lib/clinic";
+import { list, isTraining } from "../../lib/clinic";
+import type { PatientAppointment } from "../../types";
 import type { Side } from "./Patientside";
 
 export interface SkateSession {
@@ -75,4 +76,30 @@ export function timeRangeTH(start: string | null | undefined, end: string) {
       timeZone: "Asia/Bangkok",
     });
   return start ? `${hm(start)} – ${hm(end)} น.` : `จบ ${hm(end)} น.`;
+}
+
+/** เวลาที่ฝึกได้ถึงของนัดนี้
+ *  - เวชเรียกคิวแล้ว: นับจากเวลาเริ่มจริง (started_at หรือ called_at) + ระยะนัด → มาสาย/เรียกช้าก็ยังได้ฝึกครบเวลา
+ *  - ยังไม่เรียก: ใช้เวลาจบของช่องนัด */
+export function trainingEndsAt(a: PatientAppointment): Date {
+  const dur = (a.duration_min || 60) * 60000;
+  const slotEnd = new Date(a.appointment_date).getTime() + dur;
+  const start = a.started_at ?? a.called_at;
+  return new Date(
+    start ? Math.max(slotEnd, new Date(start).getTime() + dur) : slotEnd,
+  );
+}
+
+/** นัดฝึกของวันนี้ (ไม่นับที่ยกเลิก/ไม่มา) — ถ้ามีหลายนัด เอาที่กำลังฝึกก่อน */
+export function todayTrainingAppt(
+  appts: PatientAppointment[],
+): PatientAppointment | null {
+  const today = new Date().toDateString();
+  const xs = appts.filter(
+    (a) =>
+      isTraining(a) &&
+      !["CANCELLED", "NO_SHOW"].includes(a.status) &&
+      new Date(a.appointment_date).toDateString() === today,
+  );
+  return xs.find((a) => a.status === "IN_PROGRESS") ?? xs[0] ?? null;
 }

@@ -18,6 +18,7 @@ import {
 import {
   fetchSkateSessions,
   skateOnDay,
+  trainingEndsAt,
   type SkateSession,
 } from "./patientSkate";
 import {
@@ -80,11 +81,13 @@ export default function PatientQueuePage({ patientId, onTrain }: Props) {
   }, [patientId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // นักกายภาพเริ่มฝึกให้แล้ว → เข้าหน้าฝึกให้อัตโนมัติ (ผู้ป่วยกดปุ่ม "ไปที่เครื่องฝึก" เองก็ได้)
+  // หมดเวลาฝึกแล้วไม่พาเข้า (กันเด้งไปหน้าฝึกตอนนัดค้างสถานะ "กำลังฝึก")
   const inProgress = mine.some(
     (a) =>
       a.status === "IN_PROGRESS" &&
       isTraining(a) &&
-      sameDay(new Date(a.appointment_date), today),
+      sameDay(new Date(a.appointment_date), today) &&
+      new Date() <= trainingEndsAt(a),
   );
   useEffect(() => {
     if (inProgress) onTrain();
@@ -157,10 +160,15 @@ export default function PatientQueuePage({ patientId, onTrain }: Props) {
       ? sidesToDo.every((sd) => bySide[sd] >= perDay)
       : setsToday >= perDay);
 
-  // เวลานัด: ฝึกได้เฉพาะช่วงนัด (ถึงเวลาจบนัด) ถ้าเลยแล้วต้องให้เคาน์เตอร์เลื่อนนัดก่อน
+  // เวลาฝึก: ถ้าเวชเรียกคิวแล้ว นับจากตอนเรียกจริง + ระยะนัด (เรียกช้าก็ยังได้ฝึกครบเวลา)
+  // ยังไม่เรียก = ถึงเวลาจบช่องนัด · เลยแล้วต้องให้เคาน์เตอร์เลื่อนนัดก่อน
   const now = new Date();
+  const endsAt = trainingEndsAt(appt);
+  // เวลาที่เวชเรียกคิวจริง (เรียกช้ากว่านัด → ฝึกได้ถึงเวลาเรียก + ระยะนัด)
+  const calledStr = appt.started_at ?? appt.called_at;
+  const calledAt = calledStr ? new Date(calledStr) : null;
   const reached = now >= todayAt(s) || !!appt.called_at; // ถึงเวลานัด หรือถูกเรียกคิวแล้ว
-  const expired = st !== "COMPLETED" && now > todayAt(slotEnd(s));
+  const expired = st !== "COMPLETED" && now > endsAt;
   const checkedIn = st === "CHECKED_IN" || st === "IN_PROGRESS";
 
   const badge =
@@ -170,7 +178,7 @@ export default function PatientQueuePage({ patientId, onTrain }: Props) {
         ? [
             trained
               ? `ฝึกแล้ว ${setsToday} เซต · หมดเวลานัด`
-              : "เลยเวลานัดแล้ว",
+              : "หมดเวลาฝึกแล้ว",
             "#EEECF2",
             "#5A566A",
           ]
@@ -233,7 +241,9 @@ export default function PatientQueuePage({ patientId, onTrain }: Props) {
           {s}
         </span>
         <span className="text-[15px] text-pt-muted">
-          ถึง {slotEnd(s)} น.
+          {calledAt && !expired && hhmm(endsAt) !== slotEnd(s)
+            ? `เรียกคิว ${hhmm(calledAt)} น. · ฝึกได้ถึง ${hhmm(endsAt)} น.`
+            : `ถึง ${slotEnd(s)} น.`}
           {program && !assess
             ? ` · ฝึก ${Math.round(program.duration_sec / 60)} นาที`
             : assess
@@ -285,9 +295,11 @@ export default function PatientQueuePage({ patientId, onTrain }: Props) {
         <div className="flex items-start gap-3 rounded-2xl bg-white px-4 py-4">
           <Clock size={22} className="mt-0.5 shrink-0 text-pt-muted" />
           <div className="flex flex-col">
-            <span className="text-[16px] font-semibold">หมดเวลานัดแล้ว</span>
+            <span className="text-[16px] font-semibold">
+              หมดเวลาฝึกวันนี้แล้ว
+            </span>
             <span className="text-[15px] text-pt-muted">
-              ถ้าต้องการฝึกต่อ ติดต่อเคาน์เตอร์เพื่อเลื่อนนัด
+              ดูวันนัดครั้งถัดไปได้ที่หน้านัดหมาย
             </span>
           </div>
         </div>
