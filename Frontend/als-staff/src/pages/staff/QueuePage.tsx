@@ -29,7 +29,7 @@ export default function QueuePage({ onOpenPatient }: Props) {
   const dayAppts = appts.filter(a => sameDay(new Date(a.appointment_date), sel))
   const assessments = dayAppts.filter(a => a.appointment_type === 'ASSESSMENT' && a.status !== 'CANCELLED')
   // เพิ่มเข้าคิวได้เฉพาะผู้ป่วยที่ลงทะเบียน (เปิดเคส) วันนี้และยังไม่มีนัด · คนที่มีนัดแล้วขึ้นในช่องของนัดนั้นเอง
-  // ผู้ป่วยใหม่ (รอประเมิน) → เข้าคิวประเมิน ไม่ใช้กระดาน · ผ่านการประเมินแล้ว → เข้าคิวฝึก
+  // ผู้ป่วยใหม่ (รอประเมิน) → เข้าคิวประเมิน ไม่ใช้อุปกรณ์ · ผ่านการประเมินแล้ว → เข้าคิวฝึก
   const [patients, setPatients] = useState<Patient[]>([])
   const [therapists, setTherapists] = useState<Therapist[]>([])
   const [adding, setAdding] = useState<{ s: string; patientId: string; otId: string } | null>(null)

@@ -43,9 +43,6 @@ export default function PatientHistoryPage({
   const visits = pastVisits(appts);
   const came = visits.filter((v) => v.status === "COMPLETED");
   const shown = visits.slice(0, show);
-  const caretaker = patient.caretaker_name
-    ? `ผู้ดูแล ${patient.caretaker_name}${patient.caretaker_phone ? ` ${patient.caretaker_phone}` : ""}`
-    : "";
 
   return (
     <>
@@ -53,7 +50,6 @@ export default function PatientHistoryPage({
       <PatientHeader
         patient={patient}
         programs={programs}
-        extra={[caretaker]}
         showPt
       />
       {requests.filter((r) => r.status === "PENDING").map((r) => (
@@ -115,10 +111,7 @@ export default function PatientHistoryPage({
           </button>
         )}
       </div>
-      <span className="text-[12px] text-rx-muted">
-        เวชระเบียนเห็นข้อมูลการสอบถามเพิ่มจากผู้ป่วย นัดที่นักกายภาพขอพร้อมหมายเหตุ
-        และวันนัดที่ลงให้ · ผลการกายภาพ ผลการประเมินอาการ และแผนการรักษา เปิดดูได้เฉพาะนักกายภาพ
-      </span>
+      
     </>
   );
 }

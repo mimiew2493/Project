@@ -97,10 +97,6 @@ export async function POST(req: Request) {
           subdistrict: body.subdistrict || null,
           district: body.district || null,
           province: body.province || null,
-          caretaker_name: body.caretakerName || null,
-          caretaker_phone: body.caretakerPhone || null,
-          caretaker_relation: body.caretakerRelation || null,
-          caretaker_can_use_app: body.caretakerCanUseApp ?? null,
         })
       }
 
@@ -144,7 +140,7 @@ export async function POST(req: Request) {
 
 /**
  * PATCH /api/register → แก้ข้อมูลทั่วไปของผู้ป่วย (เวชระเบียน)
- * { patientId, usersId, phone?, firstName?, ..., address?, caretaker*?, newPassword? }
+ * { patientId, usersId, phone?, firstName?, ..., address?, newPassword? }
  * ข้อมูลการรักษา (ระยะอาการ ผลประเมิน) แก้ที่นี่ไม่ได้ · น้ำหนักบันทึกต่อการมาแต่ละครั้งตอนรับเข้าคิว
  * primaryOtId → เปลี่ยนนักกายภาพประจำเคสที่เปิดอยู่
  */
@@ -169,10 +165,6 @@ export async function PATCH(req: Request) {
     if (body.subdistrict !== undefined) patientPatch.subdistrict = body.subdistrict || null
     if (body.district !== undefined) patientPatch.district = body.district || null
     if (body.province !== undefined) patientPatch.province = body.province || null
-    if (body.caretakerName !== undefined) patientPatch.caretaker_name = body.caretakerName || null
-    if (body.caretakerPhone !== undefined) patientPatch.caretaker_phone = body.caretakerPhone || null
-    if (body.caretakerRelation !== undefined) patientPatch.caretaker_relation = body.caretakerRelation || null
-    if (body.caretakerCanUseApp !== undefined) patientPatch.caretaker_can_use_app = body.caretakerCanUseApp
 
     // ผู้ดูแลเคส (นักกายภาพประจำเคส) ของเคสที่เปิดอยู่
     const openCase = body.primaryOtId !== undefined ? await openCaseOf(body.patientId) : null

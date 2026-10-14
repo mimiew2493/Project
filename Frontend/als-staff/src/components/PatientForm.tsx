@@ -51,11 +51,11 @@ export function PersonFields({ v, set, id }: { v: Record<PersonKey, string>; set
         <select id={`${id}sex`} className={selectCls} value={v.gender} onChange={set('gender')}><option>ไม่ระบุ</option><option>ชาย</option><option>หญิง</option></select>
       </Field>
       <Field label="เบอร์โทร" htmlFor={`${id}tel`}><input id={`${id}tel`} className={inputCls} placeholder="08x-xxx-xxxx" value={v.phone} onChange={set('phone')} /></Field>
-      <Field label="ที่อยู่ (บ้านเลขที่ หมู่ ถนน)" htmlFor={`${id}addr`} className="sm:col-span-2"><input id={`${id}addr`} className={inputCls} placeholder="เช่น 31/6 ม.2 ถ.กาญจนวนิช" value={v.address} onChange={set('address')} /></Field>
+      <Field label="ที่อยู่ (บ้านเลขที่ หมู่ ถนน)" htmlFor={`${id}addr`} className="sm:col-span-2"><input id={`${id}addr`} className={inputCls} placeholder=" " value={v.address} onChange={set('address')} /></Field>
       <div className="grid grid-cols-1 gap-3.5 sm:col-span-2 sm:grid-cols-3">
-        <Field label="แขวง/ตำบล" htmlFor={`${id}sub`}><input id={`${id}sub`} className={inputCls} placeholder="เช่น คอหงส์" value={v.subdistrict} onChange={set('subdistrict')} /></Field>
-        <Field label="อำเภอ/เขต" htmlFor={`${id}dis`}><input id={`${id}dis`} className={inputCls} placeholder="เช่น หาดใหญ่" value={v.district} onChange={set('district')} /></Field>
-        <Field label="จังหวัด" htmlFor={`${id}prov`}><input id={`${id}prov`} className={inputCls} placeholder="เช่น สงขลา" value={v.province} onChange={set('province')} /></Field>
+        <Field label="แขวง/ตำบล" htmlFor={`${id}sub`}><input id={`${id}sub`} className={inputCls} placeholder=" " value={v.subdistrict} onChange={set('subdistrict')} /></Field>
+        <Field label="เขต/อำเภอ" htmlFor={`${id}dis`}><input id={`${id}dis`} className={inputCls} placeholder=" " value={v.district} onChange={set('district')} /></Field>
+        <Field label="จังหวัด" htmlFor={`${id}prov`}><input id={`${id}prov`} className={inputCls} placeholder=" " value={v.province} onChange={set('province')} /></Field>
       </div>
     </div>
   )

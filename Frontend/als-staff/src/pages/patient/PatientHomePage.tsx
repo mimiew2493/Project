@@ -262,7 +262,7 @@ export default function PatientHomePage({
           onClick={() => onNavigate("patient-queue")}
           className="flex h-[56px] items-center justify-center gap-2 rounded-[14px] bg-pt-accent text-[17px] font-semibold text-white active:scale-[.98]"
         >
-          <PlayCircle size={20} /> ดูคิวของฉันวันนี้
+          <PlayCircle size={20} /> เริ่มฝึก
         </button>
       </div>
 

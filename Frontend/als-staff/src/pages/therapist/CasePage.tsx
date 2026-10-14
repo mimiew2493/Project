@@ -624,9 +624,10 @@ function AfterCard({
     list<AppointmentRequest>(
       `/api/appointment-requests?patient_id=${patient.patient_id}`,
     ).then(setRequests);
+  // โหลดใหม่ทุกครั้งที่การ์ดกลับมาแสดง (เช่น หลังบันทึกผลพร้อมส่งนัด) → ไม่เปิดช่องให้ส่งนัดซ้ำ
   useEffect(() => {
     loadRequests();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [hidden, patient?.patient_id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!patient) return null;
   const closed = patient.case_status === "CLOSED";
@@ -725,21 +726,7 @@ function AfterCard({
                   {pending.note ? `หมายเหตุ: ${pending.note}` : "ไม่มีหมายเหตุ"}
                 </span>
               </div>
-              <Btn
-                variant="outline"
-                size="sm"
-                disabled={busy}
-                onClick={() =>
-                  run(() =>
-                    api("/api/appointment-requests", {
-                      method: "PATCH",
-                      body: { requestId: pending.request_id, action: "CANCEL" },
-                    }),
-                  )
-                }
-              >
-                ยกเลิกนัด
-              </Btn>
+              {/* ส่งนัดแล้วยกเลิก/ส่งซ้ำไม่ได้ */}
             </div>
           )}
           {!pending && (

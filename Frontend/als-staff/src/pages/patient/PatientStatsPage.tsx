@@ -32,10 +32,6 @@ const SIDE_COLOR: Record<Side, { bar: string; tint: string; ink: string }> = {
 };
 const SIDES: Side[] = ["RIGHT", "LEFT"];
 
-/** ค่าเฉลี่ยครั้งต่อเซต (ไว้ดูการฟื้นตัว เพราะจำนวนเซตแต่ละวันไม่เท่ากัน) */
-const avgPerSet = (ss: SkateSession[]) =>
-  ss.length ? totalReps(ss) / ss.length : 0;
-
 export default function PatientStatsPage({ patientId }: Props) {
   const [sessions, setSessions] = useState<SkateSession[]>([]);
   const [programs, setPrograms] = useState<PatientProgram[]>([]);
@@ -61,7 +57,6 @@ export default function PatientStatsPage({ patientId }: Props) {
   const now = new Date();
   const mon = addDays(mondayOf(now), wk * 7);
   const days = Array.from({ length: 7 }, (_, i) => addDays(mon, i));
-  const prevDays = days.map((d) => addDays(d, -7));
 
   // แขนที่มีข้อมูล (ผู้ป่วยฝึกข้างเดียวจะเห็นแค่ข้างเดียว)
   const sidesUsed = SIDES.filter((sd) => sessions.some((x) => x.side === sd));
@@ -69,9 +64,8 @@ export default function PatientStatsPage({ patientId }: Props) {
   const ofSide = (ss: SkateSession[], sd: Side) =>
     ss.filter((x) => x.side === sd);
 
-  // ผลของสัปดาห์ที่ดู / สัปดาห์ก่อนหน้า
+  // ผลของสัปดาห์ที่ดู
   const week = days.flatMap((d) => skateOnDay(sessions, d));
-  const prevWeek = prevDays.flatMap((d) => skateOnDay(sessions, d));
 
   // กราฟ: จำนวนครั้งต่อวัน แยกแขน
   const daily = days.map((d) => {
@@ -114,13 +108,9 @@ export default function PatientStatsPage({ patientId }: Props) {
     .filter(Boolean)
     .sort()[0];
 
-  /** การ์ดสรุปของแต่ละแขน: รวมครั้ง, เซต, เฉลี่ยต่อเซต, เทียบสัปดาห์ก่อน */
+  /** การ์ดสรุปของแต่ละแขน: รวมครั้ง, เซต */
   const sideCard = (sd: Side) => {
     const cur = ofSide(week, sd);
-    const prev = ofSide(prevWeek, sd);
-    const a = avgPerSet(cur);
-    const b = avgPerSet(prev);
-    const diff = cur.length && prev.length ? a - b : null;
     const c = SIDE_COLOR[sd];
     return (
       <div
@@ -135,18 +125,8 @@ export default function PatientStatsPage({ patientId }: Props) {
           {totalReps(cur)} ครั้ง
         </span>
         <span className="text-[14px] text-pt-muted">
-          {cur.length} เซต · เฉลี่ย {a.toFixed(1)} ครั้ง/เซต
+          {cur.length} เซต
         </span>
-        {diff !== null && (
-          <span
-            className={`text-[14px] font-semibold ${diff > 0 ? "text-[#145C38]" : diff < 0 ? "text-[#B42318]" : "text-pt-muted"}`}
-          >
-            {diff > 0 ? "▲" : diff < 0 ? "▼" : "•"}{" "}
-            {diff === 0
-              ? "เท่าสัปดาห์ก่อน"
-              : `${Math.abs(diff).toFixed(1)} จากสัปดาห์ก่อน`}
-          </span>
-        )}
       </div>
     );
   };

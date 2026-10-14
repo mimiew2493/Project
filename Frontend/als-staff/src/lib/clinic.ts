@@ -138,7 +138,7 @@ export const BADGE: Record<QueueState, [string, string, string]> = {
   review: ['รอเวชระเบียนสรุปผล', '#FFF0D9', '#8C420A'],
   now: ['กำลังฝึก', '#E3EEF9', '#1F5573'],
   called: ['เรียกคิวแล้ว', '#E3EEF9', '#1F5573'],
-  wait: ['มาแล้ว รอ', '#FFF0D9', '#8C420A'],
+  wait: ['ลงทะเบียนแล้ว', '#FFF0D9', '#8C420A'],
   notyet: ['ยังไม่มา', '#EEF1F6', '#4A5B6E'],
   booked: ['นัด', '#E5F1FF', '#0066D6'],
   noshow: ['ไม่มา', '#FCEBEB', '#791F1F'],

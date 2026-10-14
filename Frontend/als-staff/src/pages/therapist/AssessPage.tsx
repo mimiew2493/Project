@@ -69,10 +69,7 @@ export default function AssessPage({ user, appointmentId, onBack, onDone }: Prop
     ['ระดับความเจ็บปวด', patient.pain_level != null ? <><span className="font-semibold">{patient.pain_level}</span> <span className="text-rx-muted">(สเกล 0–10)</span></> : '—'],
     ['ข้างที่มีอาการ', patient.symptom_location || '—'],
     ['เริ่มมีอาการ', patient.onset_duration || '—'],
-    ['ข้อมูลทั่วไป', [
-      patient.weight ? `น้ำหนัก ${Number(patient.weight)} กก.` : '',
-      patient.caretaker_name ? `ผู้ดูแล ${patient.caretaker_name}${patient.caretaker_relation ? ` (${patient.caretaker_relation})` : ''}${patient.caretaker_phone ? ` ${patient.caretaker_phone}` : ''}` : '',
-    ].filter(Boolean).join(' · ') || '—'],
+    ['ข้อมูลทั่วไป', patient.weight ? `น้ำหนัก ${Number(patient.weight)} กก.` : '—'],
   ]
 
   return (

@@ -91,6 +91,11 @@ export async function POST(req: Request) {
     if (body.earliestDate <= thaiDay(new Date())) return fail('ช่วงที่ขอนัดต้องเริ่มตั้งแต่พรุ่งนี้เป็นต้นไป')
     const c = await openCaseOf(body.patientId)
     if (!c || c.status !== 'ACTIVE') return fail('ผู้ป่วยไม่มีเคสที่กำลังรักษา')
+    if (!String(body.note ?? '').trim()) return fail('กรอกหมายเหตุการนัดก่อน')
+    // ส่งนัดไปแล้วและยังรอเวชระเบียนลงวันเวลา → ไม่รับซ้ำ
+    const [pending] = await db.select({ id: appointmentRequests.request_id }).from(appointmentRequests)
+      .where(and(eq(appointmentRequests.patient_id, body.patientId), eq(appointmentRequests.status, 'PENDING'))).limit(1)
+    if (pending) return fail('ส่งนัดไปแล้ว · รอเวชระเบียนลงวันและเวลา', 409)
 
     const requestId = await generateId(ID_PREFIX.APPOINTMENT_REQUEST, SEQUENCE.APPOINTMENT_REQUEST)
     await db.insert(appointmentRequests).values({
@@ -113,13 +118,14 @@ export async function POST(req: Request) {
 /**
  * PATCH /api/appointment-requests { requestId, action }
  *   BOOK   (เวชระเบียน) { appointmentDate } → ลงนัดฝึกจริงในช่องที่เลือก ต้องอยู่ในช่วงที่นักกายภาพขอ
- *   CANCEL (นักกายภาพ / เวชระเบียน) ยกเลิกคำขอ
+ *   CANCEL (เวชระเบียน) ยกเลิกคำขอ
  * ช่องชนกัน / ผู้ป่วยมีนัดวันนั้นแล้ว ฐานข้อมูลปฏิเสธเอง (exclusion constraint, unique index)
  */
 export async function PATCH(req: Request) {
   try {
     const body = await req.json()
-    const viewer = requireViewer(req, ...(body.action === 'BOOK' ? [ROLE.RECORDS] : [ROLE.RECORDS, ROLE.THERAPIST]))
+    // ทั้ง BOOK และ CANCEL เป็นงานเวชระเบียน — นักกายภาพส่งนัดแล้วยกเลิกเองไม่ได้
+    const viewer = requireViewer(req, ROLE.RECORDS)
     if (!body.requestId) return fail('ต้องระบุ requestId')
     const [r] = await db.select().from(appointmentRequests).where(eq(appointmentRequests.request_id, body.requestId))
     if (!r) return fail('ไม่พบคำขอนัด', 404)

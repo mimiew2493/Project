@@ -61,10 +61,6 @@ export async function GET(req: Request) {
         subdistrict: patients.subdistrict,
         district: patients.district,
         province: patients.province,
-        caretaker_name: patients.caretaker_name,
-        caretaker_phone: patients.caretaker_phone,
-        caretaker_relation: patients.caretaker_relation,
-        caretaker_can_use_app: patients.caretaker_can_use_app,
       })
       .from(patients)
       .innerJoin(users, eq(patients.users_id, users.users_id))

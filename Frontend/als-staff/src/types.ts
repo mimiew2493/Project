@@ -34,8 +34,6 @@ export interface Patient {
   title_name?: string | null; subdistrict?: string | null; district?: string | null; province?: string | null
   first_name?: string | null; last_name?: string | null; phone?: string | null
   email?: string | null; birth_date?: string | null; gender?: string | null
-  caretaker_name?: string | null; caretaker_phone?: string | null
-  caretaker_relation?: string | null; caretaker_can_use_app?: boolean | null
   chief_complaint?: string | null; pain_level?: number | null
   symptom_location?: string | null; onset_duration?: string | null
   current_stage?: DiseaseStage | null

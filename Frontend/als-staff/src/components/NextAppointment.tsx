@@ -7,8 +7,8 @@ import { textareaCls } from './ui'
  */
 export interface NextAppt { want: boolean; note: string }
 export const emptyNextAppt = (): NextAppt => ({ want: true, note: '' })
-/** ไม่มีอะไรบังคับกรอก — หมายเหตุใส่หรือไม่ใส่ก็ได้ */
-export const nextApptMissing = (_v: NextAppt) => ''
+/** เลือก "นัด" แล้วต้องกรอกหมายเหตุ (เวชระเบียนใช้ลงวันเวลา) */
+export const nextApptMissing = (v: NextAppt) => (v.want && !v.note.trim() ? 'กรอกหมายเหตุการนัดก่อน' : '')
 
 const BOOK_WINDOW = { from: 1, to: 60 }
 
@@ -36,8 +36,9 @@ export function NextApptFields({ value, onChange, id = 'na' }: { value: NextAppt
       </div>
       {value.want && (
         <div className="flex flex-col gap-1.5">
-          <label htmlFor={`${id}-note`} className="text-[13px] font-semibold">หมายเหตุ</label>
-          <textarea id={`${id}-note`} rows={2} className={textareaCls} placeholder="เช่น นัดอีก 1 สัปดาห์ ช่วงเช้า" value={value.note} onChange={e => onChange({ ...value, note: e.target.value })} />
+          <label htmlFor={`${id}-note`} className="text-[13px] font-semibold">หมายเหตุ <span className="text-[#D92D20]">*</span></label>
+          <textarea id={`${id}-note`} rows={2} required aria-required="true" className={`${textareaCls}${value.note.trim() ? '' : ' !border-[#D92D20]'}`} placeholder="เช่น นัดอีก 1 สัปดาห์ ช่วงเช้า" value={value.note} onChange={e => onChange({ ...value, note: e.target.value })} />
+          {!value.note.trim() && <span className="text-[12px] font-medium text-[#D92D20]">ต้องกรอก</span>}
         </div>
       )}
     </div>

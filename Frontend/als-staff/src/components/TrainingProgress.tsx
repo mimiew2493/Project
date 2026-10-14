@@ -35,19 +35,36 @@ export function useRepSets(
   }, [patientId, sessions.length]);
   const asSide = (s?: string | null): Side =>
     s === "LEFT" || s === "RIGHT" ? s : fallbackSide;
+  const board: RepSet[] = sessions.map((s) => ({
+    id: s.session_id,
+    side: asSide(s.side),
+    reps: s.total_reps,
+    at: s.session_date,
+  }));
+  // เซตเดียวกันถูกบันทึกทั้งสองตาราง → ข้ามแถว skateboard ที่ตรงกับเซตในนัด (ข้างเดียวกัน ครั้งเท่ากัน ห่างกันไม่เกิน 2 นาที)
+  const used = new Set<string>();
+  const isDup = (x: RepSet) => {
+    const t = new Date(x.at).getTime();
+    const m = board.find(
+      (b) =>
+        !used.has(b.id) &&
+        b.side === x.side &&
+        b.reps === x.reps &&
+        Math.abs(new Date(b.at).getTime() - t) <= 120_000,
+    );
+    if (m) used.add(m.id);
+    return !!m;
+  };
   return [
-    ...sessions.map((s) => ({
-      id: s.session_id,
-      side: asSide(s.side),
-      reps: s.total_reps,
-      at: s.session_date,
-    })),
-    ...skate.map((s) => ({
-      id: `SK${s.id}`,
-      side: asSide(s.side),
-      reps: s.session_count ?? 0,
-      at: s.created_at,
-    })),
+    ...board,
+    ...skate
+      .map((s) => ({
+        id: `SK${s.id}`,
+        side: asSide(s.side),
+        reps: s.session_count ?? 0,
+        at: s.created_at,
+      }))
+      .filter((x) => !isDup(x)),
   ]
     .filter((x) => x.reps > 0)
     .sort((a, b) => a.at.localeCompare(b.at));

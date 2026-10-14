@@ -112,7 +112,7 @@ export function VisitCard({ a, sessions, patient, variant, amendments = [], requ
         const rows: [string, string][] = []
         if (asked) rows.push([SOAP_LABEL.S, asked])
         for (const r of reqs) {
-          if (r.note) rows.push(['หมายเหตุจากนักกายภาพ', r.note])
+          if (r.note) rows.push(['รายเอียดการนัด', r.note])
           const booked = r.appointment_id ? appts.find(x => x.appointment_id === r.appointment_id) : undefined
           rows.push(['วันนัดที่เวชระเบียนลง',
             booked ? `${thaiDate(new Date(booked.appointment_date))} · ${slotLabel(apptSlot(booked))} น.${r.booked_at ? ` (ลงนัดเมื่อ ${thaiDate(new Date(r.booked_at))} ${hhmm(new Date(r.booked_at))} น.)` : ''}`

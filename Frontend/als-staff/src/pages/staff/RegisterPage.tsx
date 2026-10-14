@@ -52,7 +52,7 @@ const EMPTY_NEW = {
   firstName: "",
   lastName: "",
   birthDate: "",
-  gender: "ไม่ระบุ",
+  gender: "",
   phone: "",
   weight: "",
   address: "",
